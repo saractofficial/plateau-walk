@@ -2,146 +2,317 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b1220">
 <title>あるく行路 × PLATEAU 観光スポットマップ</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root{
-    --bg:#f6f5f1; --panel:#ffffff; --ink:#1f2328; --sub:#6b7078; --line:#e3e1db;
-    --accent:#0b6e4f; --accent-soft:#e3f1ec; --route:#d6452b;
+    --bg:#f2f4f8; --panel:#ffffff; --ink:#0f172a; --sub:#64748b; --line:#e5e9f0;
+    --accent:#2563eb; --accent-2:#0ea5e9; --accent-soft:#eaf1ff; --route:#2563eb;
     --c-landmark:#c2410c; --c-park:#15803d; --c-station:#1d4ed8; --c-shelter:#7c3aed; --c-other:#475569;
+    --navH:calc(64px + env(safe-area-inset-bottom)); --topS:env(safe-area-inset-top);
+    --glass:rgba(255,255,255,.86); --shadow:0 8px 30px rgba(15,23,42,.18);
   }
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%;font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif;color:var(--ink);background:var(--bg)}
-  #app{display:grid;grid-template-columns:380px 1fr;height:100vh}
-  #side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
-  header{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
-  header h1{font-size:16px;margin:0;letter-spacing:.02em}
-  header p{margin:4px 0 0;font-size:12px;color:var(--sub)}
-  .tabs{display:flex;border-bottom:1px solid var(--line)}
-  .tabs button{flex:1;padding:10px 4px;border:0;background:none;font:inherit;font-size:13px;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent}
-  .tabs button.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
-  .pane{display:none;padding:14px 16px;overflow:auto;flex:1;min-height:0}
-  .pane.on{display:block}
-  h2{font-size:13px;margin:14px 0 8px;color:var(--sub);font-weight:600}
-  h2:first-child{margin-top:0}
-  label{font-size:13px}
-  input[type=text],select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:14px;background:#fff}
-  .row{display:flex;gap:8px;align-items:center}
-  .row>*{flex:1}
-  .btn{display:inline-flex;justify-content:center;align-items:center;gap:6px;padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;font:inherit;font-size:13px;cursor:pointer;color:var(--ink)}
-  .btn:hover{border-color:#c9c6be}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-  .btn.on{background:var(--route);border-color:var(--route);color:#fff}
-  .btn:disabled{opacity:.5;cursor:default}
-  .hint{font-size:12px;color:var(--sub);line-height:1.6;margin:6px 0}
-  .status{font-size:12px;line-height:1.6;padding:8px 10px;border-radius:8px;background:var(--accent-soft);margin-top:8px;white-space:pre-wrap}
-  .status.err{background:#fdecea;color:#8a1c12}
-  .chips{display:flex;flex-wrap:wrap;gap:6px}
-  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:5px 9px;border:1px solid var(--line);border-radius:999px;cursor:pointer;user-select:none}
-  .chip input{margin:0}
-  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
-  .drop{border:1.5px dashed #c9c6be;border-radius:10px;padding:14px;text-align:center;font-size:12px;color:var(--sub);cursor:pointer}
-  .drop.over{border-color:var(--accent);background:var(--accent-soft)}
-  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
-  .stat{background:var(--bg);border-radius:8px;padding:8px}
-  .stat b{display:block;font-size:18px}
-  .stat span{font-size:11px;color:var(--sub)}
-  ol.spots{list-style:none;margin:0;padding:0}
-  ol.spots li{display:grid;grid-template-columns:30px 1fr;gap:8px;padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer}
-  ol.spots li:hover{background:var(--bg)}
-  .num{width:26px;height:26px;border-radius:50%;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
-  .sname{font-size:14px;font-weight:600}
-  .smeta{font-size:12px;color:var(--sub);margin-top:2px}
-  #map{height:100%;width:100%}
-  .pin{width:24px;height:24px;border-radius:50%;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
-  .leaflet-popup-content{font-size:12px;max-width:280px}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif;color:var(--ink);background:#0b1220;-webkit-font-smoothing:antialiased}
+  #app{position:fixed;inset:0}
+  #mapwrap{position:absolute;inset:0}
+  #map{height:100%;width:100%;background:#1e293b}
+
+  /* ===== 上部：検索バー ===== */
+  .topbar{position:absolute;z-index:1000;left:12px;right:12px;top:calc(var(--topS) + 10px)}
+  .search{display:flex;align-items:center;gap:6px;height:50px;padding:0 6px 0 14px;border-radius:16px;background:var(--glass);backdrop-filter:blur(16px) saturate(1.6);-webkit-backdrop-filter:blur(16px) saturate(1.6);box-shadow:var(--shadow)}
+  .search svg{flex:0 0 20px;color:var(--sub)}
+  .search input{flex:1;min-width:0;border:0;background:transparent;font:inherit;font-size:16px;outline:none;color:var(--ink)}
+  .search button{border:0;background:var(--accent);color:#fff;font:inherit;font-size:14px;font-weight:600;padding:9px 14px;border-radius:12px;cursor:pointer}
+  .presults{margin-top:8px;border-radius:16px;overflow:hidden;background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:var(--shadow)}
+  .presults:empty{display:none}
+  .presults button{display:block;width:100%;text-align:left;padding:12px 14px;border:0;border-bottom:1px solid var(--line);background:transparent;font:inherit;font-size:15px;cursor:pointer;color:var(--ink)}
+  .presults button:last-child{border-bottom:0}
+  .presults button small{display:block;color:var(--sub);font-size:12px;margin-top:2px}
+  .presults .hint{padding:10px 14px;margin:0}
+
+  /* ===== 右：丸ボタン ===== */
+  .fabs{position:absolute;z-index:999;right:12px;top:calc(var(--topS) + 72px);display:flex;flex-direction:column;gap:10px}
+  .fabbtn{width:46px;height:46px;border-radius:14px;border:0;background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;color:var(--ink);cursor:pointer}
+  .fabbtn.on{background:var(--accent);color:#fff}
+  .layermenu{position:absolute;z-index:1001;right:66px;top:calc(var(--topS) + 72px);width:236px;padding:10px;border-radius:18px;background:var(--glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:var(--shadow);display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .layermenu[hidden]{display:none}
+  .layermenu button{border:0;background:none;padding:0;font:inherit;font-size:11px;color:var(--ink);cursor:pointer;text-align:center}
+  .layermenu button i{display:block;height:52px;border-radius:12px;margin-bottom:4px;border:2px solid transparent;background-size:cover}
+  .layermenu button.on i{border-color:var(--accent)}
+  .layermenu button.on{color:var(--accent);font-weight:700}
+
+  /* ===== 地図上の表示 ===== */
+  .km,.near{position:absolute;z-index:998;left:12px;right:70px;top:calc(var(--topS) + 72px);background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-radius:14px;padding:10px 14px;font-size:13px;box-shadow:var(--shadow);display:none;line-height:1.5}
+  .near b{color:var(--accent)}
+  .fab{position:absolute;z-index:1002;left:50%;transform:translateX(-50%);bottom:calc(var(--navH) + 140px);display:none;padding:13px 24px;border-radius:999px;border:0;background:#ef4444;color:#fff;font:inherit;font-size:15px;font-weight:700;box-shadow:0 6px 20px rgba(239,68,68,.45)}
+  .leaflet-top.leaflet-left{top:calc(var(--topS) + 64px)}
+  .leaflet-control-attribution{font-size:10px!important;background:rgba(255,255,255,.7)!important;border-radius:8px;margin:6px 0 0 12px!important;max-width:calc(100vw - 90px)}
+  .leaflet-control-scale{margin-left:12px!important}
+  .leaflet-popup-content-wrapper{border-radius:16px;box-shadow:var(--shadow)}
+  .leaflet-popup-content{font-size:12px;max-width:260px;margin:12px 14px}
   .leaflet-popup-content table{border-collapse:collapse}
   .leaflet-popup-content td{border-top:1px solid #eee;padding:2px 4px;vertical-align:top}
   .leaflet-popup-content td:first-child{color:#777;white-space:nowrap}
-  .km{position:absolute;z-index:500;background:#fff;border-radius:999px;padding:6px 12px;font-size:12px;box-shadow:0 1px 6px rgba(0,0,0,.2);left:50%;transform:translateX(-50%);top:10px;display:none}
-  #mapwrap{position:relative}
-  .near{position:absolute;z-index:500;left:54px;right:60px;top:10px;background:#fff;border-radius:12px;padding:8px 12px;font-size:13px;box-shadow:0 1px 8px rgba(0,0,0,.2);display:none;line-height:1.5}
-  .near b{color:var(--accent)}
-  .fab{position:absolute;z-index:600;left:50%;transform:translateX(-50%);bottom:24px;display:none;padding:12px 22px;border-radius:999px;border:0;background:#d6452b;color:#fff;font:inherit;font-size:15px;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.3)}
-  .btn.rec{background:#d6452b;border-color:#d6452b;color:#fff;animation:blink 1.6s infinite}
+
+  /* ===== ボトムシート ===== */
+  .sheet{position:absolute;z-index:1003;left:0;right:0;bottom:var(--navH);height:calc(100dvh - var(--navH) - var(--topS) - 70px);background:var(--panel);border-radius:22px 22px 0 0;box-shadow:0 -8px 30px rgba(15,23,42,.18);display:flex;flex-direction:column;transform:translateY(calc(100% - 128px));transition:transform .32s cubic-bezier(.2,.8,.2,1);will-change:transform}
+  .sheet.dragging{transition:none}
+  .grab{flex:0 0 auto;padding:8px 16px 10px;cursor:grab;touch-action:none;user-select:none}
+  .grab>i{display:block;width:40px;height:5px;border-radius:3px;background:#cbd5e1;margin:0 auto 10px}
+  .sumrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .stat{background:var(--bg);border-radius:14px;padding:9px 12px}
+  .stat b{display:block;font-size:19px;font-weight:800;letter-spacing:-.01em}
+  .stat span{font-size:11px;color:var(--sub)}
+  .sheet-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 16px calc(24px + env(safe-area-inset-bottom));overscroll-behavior:contain}
+
+  /* ===== 下部タブバー ===== */
+  .tabbar{position:absolute;z-index:1004;left:0;right:0;bottom:0;height:var(--navH);padding-bottom:env(safe-area-inset-bottom);display:flex;background:rgba(255,255,255,.94);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid var(--line)}
+  .tabbar button{flex:1;border:0;background:none;font:inherit;font-size:10.5px;font-weight:600;color:#94a3b8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer}
+  .tabbar button svg{width:24px;height:24px}
+  .tabbar button.on{color:var(--accent)}
+
+  /* ===== パネルの中身 ===== */
+  .pane{display:none}
+  .pane.on{display:block;animation:fade .2s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .ptitle{font-size:22px;font-weight:800;margin:6px 0 2px;letter-spacing:-.01em}
+  .psub{font-size:13px;color:var(--sub);margin:0 0 12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px;margin:12px 0}
+  .card h3{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+  h2{font-size:13px;margin:16px 0 8px;color:var(--sub);font-weight:700}
+  label{font-size:13px;color:var(--sub)}
+  input[type=text],input[type=password],select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:12px;font:inherit;font-size:15px;background:var(--bg);color:var(--ink);outline:none}
+  input[type=text]:focus,input[type=password]:focus,select:focus{border-color:var(--accent);background:#fff}
+  .row{display:flex;gap:8px;align-items:center}
+  .row>*{flex:1}
+  .btn{display:inline-flex;justify-content:center;align-items:center;gap:6px;padding:11px 12px;border-radius:12px;border:0;background:var(--bg);font:inherit;font-size:14px;font-weight:600;cursor:pointer;color:var(--ink)}
+  .btn:active{transform:scale(.98)}
+  .btn.primary{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;box-shadow:0 4px 14px rgba(37,99,235,.3)}
+  .btn.on{background:var(--accent);color:#fff}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.rec{background:#ef4444;color:#fff;animation:blink 1.6s infinite}
   @keyframes blink{50%{opacity:.75}}
-  .presults{margin-top:6px}
-  .presults button{display:block;width:100%;text-align:left;padding:8px 10px;margin-top:4px;border:1px solid var(--line);border-radius:8px;background:#fff;font:inherit;font-size:13px;cursor:pointer}
-  .presults button small{color:var(--sub)}
-  ol.wps{list-style:none;margin:8px 0 0;padding:0}
-  ol.wps li{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
-  ol.wps li .wn{flex:0 0 26px;height:26px;border-radius:50%;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .wide{width:100%}
+  .hint{font-size:12px;color:var(--sub);line-height:1.6;margin:8px 0}
+  .status{font-size:13px;line-height:1.6;padding:10px 12px;border-radius:12px;background:var(--accent-soft);color:#1e3a8a;margin-top:10px;white-space:pre-wrap}
+  .status.err{background:#fef2f2;color:#991b1b}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:6px 10px;background:var(--bg);border-radius:999px;cursor:pointer;user-select:none;color:var(--ink)}
+  .chip input{margin:0;accent-color:var(--accent)}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .drop{border:1.5px dashed #cbd5e1;border-radius:14px;padding:16px;text-align:center;font-size:13px;color:var(--sub);cursor:pointer;background:var(--bg)}
+  .drop.over{border-color:var(--accent);background:var(--accent-soft)}
+  .toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;font-size:14px;color:var(--ink)}
+  .toggle input{appearance:none;-webkit-appearance:none;width:46px;height:28px;border-radius:999px;background:#cbd5e1;position:relative;cursor:pointer;flex:0 0 auto;transition:background .2s}
+  .toggle input::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left .2s}
+  .toggle input:checked{background:var(--accent)}
+  .toggle input:checked::after{left:21px}
+  .chk{display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--ink)}
+  input[type=range]{accent-color:var(--accent)}
+  ol.spots{list-style:none;margin:0;padding:0}
+  ol.spots li{display:grid;grid-template-columns:30px 1fr;gap:10px;padding:11px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+  .num{width:28px;height:28px;border-radius:50%;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .sname{font-size:15px;font-weight:700}
+  .smeta{font-size:12px;color:var(--sub);margin-top:2px}
+  .pin{width:24px;height:24px;border-radius:50%;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+  ol.wps{list-style:none;margin:0;padding:0}
+  ol.wps:empty::before{content:"まだ地点がありません。上の検索か、右の📍ボタン→地図タップで追加します。";display:block;font-size:12px;color:var(--sub);padding:4px 0 8px;line-height:1.6}
+  ol.wps li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+  ol.wps li .wn{flex:0 0 28px;height:28px;border-radius:50%;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
   ol.wps li span.wname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  ol.wps li button{border:0;background:none;font-size:15px;cursor:pointer;color:var(--sub);padding:4px 6px}
-  .chk{display:flex;align-items:center;gap:6px;margin-top:10px}
-  .wpin{width:26px;height:26px;border-radius:50%;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4)}
-  .tpin{width:30px;height:30px;border-radius:50%;background:#fff;border:2px solid #2563eb;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 1px 6px rgba(37,99,235,.45)}
+  ol.wps li button{border:0;background:var(--bg);width:30px;height:30px;border-radius:9px;font-size:12px;cursor:pointer;color:var(--sub)}
+  .wpin{width:28px;height:28px;border-radius:50%;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .tpin{width:32px;height:32px;border-radius:50%;background:#fff;border:2px solid #2563eb;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(37,99,235,.45)}
   .pg{display:flex;align-items:center;gap:8px}
   .pgbar{flex:1;height:8px;border-radius:4px;background:rgba(37,99,235,.15);overflow:hidden}
   .pgbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#67e8f9,#3b82f6,#6366f1);border-radius:4px;transition:width .2s}
   .pg b{font-size:13px;min-width:62px;font-variant-numeric:tabular-nums;text-align:right;color:#1d4ed8}
   .pgl{font-size:12px;margin-top:4px;color:var(--sub)}
-  ol.spots li.tli{grid-template-columns:64px 1fr;gap:10px}
-  .thumb{width:64px;height:64px;border-radius:10px;object-fit:cover;background:#e0e7ff}
-  .thumb.noimg{display:flex;align-items:center;justify-content:center;font-size:26px}
+  ol.spots li.tli{grid-template-columns:68px 1fr;gap:12px}
+  .thumb{width:68px;height:68px;border-radius:14px;object-fit:cover;background:#e0e7ff}
+  .thumb.noimg{display:flex;align-items:center;justify-content:center;font-size:28px}
   .sdesc{font-size:12px;color:#334155;margin-top:3px;line-height:1.5}
-  .pphoto{display:block;width:100%;max-height:160px;object-fit:cover;border-radius:8px;margin-bottom:6px}
+  .pphoto{display:block;width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-bottom:6px}
   .pdesc{color:#475569}
-  .seg{display:flex;margin-top:10px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-  .seg button{flex:1;padding:9px 6px;border:0;background:#fff;font:inherit;font-size:13px;cursor:pointer;color:var(--sub)}
-  .seg button.on{background:#2563eb;color:#fff;font-weight:700}
+  .seg{display:flex;margin-top:12px;padding:3px;background:var(--bg);border-radius:12px}
+  .seg button{flex:1;padding:8px 6px;border:0;background:transparent;border-radius:10px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:var(--sub)}
+  .seg button.on{background:#fff;color:var(--accent);box-shadow:0 1px 4px rgba(15,23,42,.12)}
   .seg button span{font-size:11px;opacity:.85}
   ol.spots.gallery{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
-  ol.spots.gallery li{display:block;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+  ol.spots.gallery li{display:block;padding:0;border:0;border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 2px 10px rgba(15,23,42,.1)}
   ol.spots.gallery li img.gimg{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#e0e7ff}
-  ol.spots.gallery li .gb{padding:7px 9px 9px}
+  ol.spots.gallery li .gb{padding:8px 10px 10px}
   ol.spots.gallery li .sname{font-size:13px;line-height:1.35}
   ol.spots.gallery li .smeta{font-size:11px}
-  .gno{position:absolute}
   .glinks{display:flex;flex-wrap:wrap;gap:6px}
-  .glinks a{font-size:12px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--ink);background:#fff}
-  .gbox{margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
-  .gbox summary{font-size:13px;cursor:pointer}
+  .glinks a{font-size:12px;padding:8px 11px;border-radius:999px;text-decoration:none;color:var(--ink);background:var(--bg)}
+  .gbox{margin-top:10px;background:var(--bg);border-radius:14px;padding:10px 12px}
+  .gbox summary{font-size:13px;cursor:pointer;font-weight:600}
   .gattr{font-family:Roboto,Arial,sans-serif;font-size:13px;color:#5e5e5e;margin:6px 0 0;text-align:right}
-  .star{color:#e8a10c}
-  .vmodal{position:fixed;inset:0;z-index:2000;background:#111;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+  .star{color:#f59e0b}
+  .vmodal{position:fixed;inset:0;z-index:2000;background:#020617;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
   .vmodal[hidden]{display:none}
-  .vbar{display:flex;align-items:center;gap:10px;padding:10px}
-  .vmsg{color:#ddd;font-size:13px;font-variant-numeric:tabular-nums}
-  .vstage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 10px}
-  .vstage canvas,.vstage video{max-width:100%;max-height:100%;border-radius:10px;background:#222}
-  .vctrl{display:flex;gap:8px;padding:10px}
+  .vmodal .btn{background:rgba(255,255,255,.1);color:#fff}
+  .vmodal .btn.primary{background:linear-gradient(135deg,#3b82f6,#2563eb)}
+  .vbar{display:flex;align-items:center;gap:10px;padding:10px 12px}
+  .vmsg{color:#cbd5e1;font-size:13px;font-variant-numeric:tabular-nums}
+  .vstage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 12px}
+  .vstage canvas,.vstage video{max-width:100%;max-height:100%;border-radius:14px;background:#111}
+  .vctrl{display:flex;gap:8px;padding:10px 12px}
   .vctrl .btn{flex:1}
-  @media (max-width:820px){
-    #app{grid-template-columns:1fr;grid-template-rows:58dvh 42dvh;height:100dvh}
-    .btn{padding:11px 12px;font-size:14px}
-    .tabs button{padding:12px 4px;font-size:14px}
-    #side{order:2;border-right:0;border-top:1px solid var(--line)}
-    #mapwrap{order:1}
-    header{display:none}
+
+  /* ===== PC など横長の画面：左側のパネルに ===== */
+  @media (min-width:900px){
+    .topbar{left:16px;right:auto;width:420px}
+    .sheet{left:16px;right:auto;width:420px;top:calc(var(--topS) + 76px);bottom:88px;height:auto;border-radius:22px;transform:none!important}
+    .grab>i{display:none}
+    .tabbar{left:16px;right:auto;width:420px;bottom:16px;height:64px;padding:0;border-radius:18px;border:0;box-shadow:var(--shadow)}
+    .km,.near{left:452px}
+    .fab{bottom:40px}
+    .leaflet-top.leaflet-left{top:calc(var(--topS) + 10px);left:440px}
   }
 </style>
 </head>
 <body>
 <div id="app">
-  <aside id="side">
-    <header>
-      <h1>あるく行路 × PLATEAU 観光スポットマップ</h1>
-      <p>歩くルート沿いのランドマーク・公園・駅を、国土交通省 PLATEAU のデータから抽出します</p>
-    </header>
-    <div class="tabs">
-      <button data-tab="data" class="on">① データ</button>
-      <button data-tab="route">② ルート</button>
-      <button data-tab="result">③ スポット</button>
-      <button data-tab="video">④ 動画</button>
-    </div>
+  <div id="mapwrap"><div id="map"></div></div>
 
-    <!-- ① データ -->
-    <section class="pane on" id="pane-data">
-      <h2>PLATEAU から取得</h2>
+  <!-- 上部：検索 -->
+  <div class="topbar">
+    <div class="search">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="placeQ" placeholder="場所を検索して地点を追加" enterkeyhint="search" autocomplete="off">
+      <button id="placeBtn">検索</button>
+    </div>
+    <div id="placeResults" class="presults"></div>
+  </div>
+  <div class="km" id="drawTip">📍 地図をタップして地点を追加（右の📍で終了）</div>
+  <div class="near" id="nearBox"></div>
+
+  <!-- 右：丸ボタン -->
+  <div class="fabs">
+    <button class="fabbtn" id="layerBtn" title="地図の種類"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></svg></button>
+    <button class="fabbtn" id="locBtn" title="現在地"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+    <button class="fabbtn" id="fabDraw" title="地図タップで地点を追加"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><path d="M12 7v6M9 10h6" stroke-linecap="round"/></svg></button>
+  </div>
+  <div id="layerMenu" class="layermenu" hidden></div>
+  <button class="fab" id="fabStop">⏹ 記録停止</button>
+
+  <!-- ボトムシート -->
+  <div id="sheet" class="sheet">
+    <div class="grab" id="grab"><i></i>
+      <div class="sumrow">
+        <div class="stat"><b id="stLen">–</b><span>ルート距離</span></div>
+        <div class="stat"><b id="stTime">–</b><span>徒歩（80m/分）</span></div>
+        <div class="stat"><b id="stCnt">–</b><span>沿線スポット</span></div>
+      </div>
+    </div>
+    <div class="sheet-body" id="sheetBody">
+
+    <!-- ルート -->
+    <section class="pane on" id="pane-route">
+      <div class="ptitle">ルート</div>
+      <p class="psub">上の検索や地図タップで、スタート → 経由地 → ゴールを追加します</p>
+      <div class="card">
+        <ol class="wps" id="wpList"></ol>
+        <label class="toggle">道に沿った徒歩ルートにする<input type="checkbox" id="snapRoad" checked></label>
+        <div class="row">
+          <button class="btn" id="undoBtn">↶ 戻す</button>
+          <button class="btn" id="revBtn">⇅ 逆向き</button>
+          <button class="btn" id="clearBtn">全消去</button>
+        </div>
+        <button class="btn wide" id="drawBtn" style="margin-top:8px">📍 地図タップで地点を追加</button>
+        <div id="routeStatus" class="status">ルート未設定</div>
+      </div>
+      <div class="card">
+        <h3>🔵 ルートからの距離 <b id="bufferVal" style="margin-left:auto;color:var(--accent)">200 m</b></h3>
+        <input type="range" id="buffer" min="50" max="1000" step="50" value="200" style="width:100%">
+        <p class="hint" style="margin-bottom:0">この範囲に入る観光スポットを「スポット」に表示します。</p>
+      </div>
+      <div class="card">
+        <h3>🛰 GPS で歩きながら記録</h3>
+        <button class="btn wide" id="recBtn">⏺ 記録開始</button>
+        <p class="hint" style="margin-bottom:0">歩いた道がそのままルートになり、近くのスポットを画面上部に表示します。</p>
+      </div>
+      <div class="card">
+        <h3>📂 読み込み</h3>
+        <div class="drop" id="routeDrop">GPX / KML / GeoJSON を選択<input type="file" id="routeIn" accept=".gpx,.kml,.geojson,.json" hidden></div>
+        <button class="btn wide" id="sampleBtn" style="margin-top:8px">サンプル：目黒川沿い（中目黒→五反田）</button>
+      </div>
+    </section>
+
+    <!-- スポット -->
+    <section class="pane" id="pane-result">
+      <div class="ptitle">スポット</div>
+      <p class="psub">ルート沿いの観光スポットを、スタートからの順に表示します</p>
+      <button class="btn primary wide" id="tBtn">🔎 ルート沿いの観光スポットを探す</button>
+      <div id="tStatus" class="status" style="display:none"></div>
+      <div class="seg" id="tView" hidden>
+        <button data-v="all" class="on">すべて <span id="tCntAll"></span></button>
+        <button data-v="photo">📷 写真ありのみ <span id="tCntPhoto"></span></button>
+      </div>
+      <div class="chips" id="tChips" style="margin-top:10px"></div>
+      <ol class="spots" id="tList"></ol>
+      <p class="hint">名所・史跡・寺社・博物館・展望スポット・公園などを OpenStreetMap から探し、写真と説明を Wikipedia から取得します。</p>
+
+      <h2>PLATEAU の沿線スポット</h2>
+      <ol class="spots" id="spotList"></ol>
+      <p class="hint" id="emptyHint">「データ」タブで PLATEAU のデータを読み込むと、ルート沿いのランドマーク・公園・駅が並びます。</p>
       <div class="row">
+        <button class="btn" id="csvBtn">CSV出力</button>
+        <button class="btn" id="gjBtn">GeoJSON出力</button>
+      </div>
+
+      <h2>Google マップでも探す</h2>
+      <div id="gLinks" class="glinks"></div>
+      <details class="gbox" id="gBox">
+        <summary>APIキーを使って一覧表示する（任意）</summary>
+        <div class="row" style="margin-top:8px">
+          <input type="password" id="gKey" placeholder="Google Maps Platform APIキー" autocomplete="off">
+          <button class="btn" id="gKeySave" style="flex:0 0 auto">保存</button>
+        </div>
+        <p class="hint">「Maps JavaScript API」と「Places API (New)」を有効にしたキーが必要です。キーはこの端末内だけに保存されます。「ウェブサイトの制限」で <code>saractofficial.github.io/*</code> を設定してください。</p>
+        <button class="btn primary wide" id="gSearch">Google でおすすめを探す</button>
+        <div id="gStatus" class="status" style="display:none"></div>
+      </details>
+      <ol class="spots" id="gList"></ol>
+      <div id="gAttr" class="gattr" style="display:none">Google Maps</div>
+    </section>
+
+    <!-- 動画 -->
+    <section class="pane" id="pane-video">
+      <div class="ptitle">動画</div>
+      <p class="psub">光る ◯ がルートを歩き、青い軌跡を描くアニメーションを作ります</p>
+      <div class="card">
+        <label>タイトル</label>
+        <input type="text" id="vTitle" value="あるく行路" maxlength="30">
+        <div style="margin-top:10px"><label>画面の形</label>
+          <select id="vRatio"><option value="9:16">縦長 9:16（リール・ストーリー）</option><option value="1:1">正方形 1:1</option><option value="16:9">横長 16:9</option></select></div>
+        <div class="row" style="margin-top:10px">
+          <div><label>長さ</label>
+            <select id="vDur"><option value="8">8秒</option><option value="12" selected>12秒</option><option value="20">20秒</option><option value="30">30秒</option></select></div>
+          <div><label>背景地図</label>
+            <select id="vBase"><option value="night">ナイト（濃紺）</option><option value="seamlessphoto">航空写真</option><option value="voyager">モダン</option><option value="dark">ダーク</option><option value="pale">淡色地図</option><option value="std">標準地図</option></select></div>
+        </div>
+        <label class="toggle">観光スポットを順に表示<input type="checkbox" id="vTour" checked></label>
+        <label class="toggle" style="padding-top:0">PLATEAU のスポットも表示<input type="checkbox" id="vSpots"></label>
+      </div>
+      <button class="btn primary wide" id="vOpen">🎬 プレビューを開く</button>
+      <p class="hint">プレビューで「動画を作る」を押すと録画して保存できます。iPhone は共有メニューの「ビデオを保存」で写真アプリに入ります。</p>
+    </section>
+
+    <!-- データ -->
+    <section class="pane" id="pane-data">
+      <div class="ptitle">データ</div>
+      <p class="psub">国土交通省 PLATEAU のランドマーク・公園・駅のデータ</p>
+      <div class="card">
+        <h3>PLATEAU から取得</h3>
         <select id="areaPreset">
           <option value="13100">東京都23区（13100）</option>
           <option value="14100">横浜市（14100）</option>
@@ -153,135 +324,31 @@
           <option value="01100">札幌市（01100）</option>
           <option value="">その他（コード入力）</option>
         </select>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <input type="text" id="areaCode" value="13100" placeholder="市区町村コード（カンマ区切り可）">
-        <button class="btn primary" id="fetchApi" style="flex:0 0 auto">取得</button>
-      </div>
-      <p class="hint">PLATEAU データカタログ API（GraphQL）から「ランドマーク」「公園」「鉄道駅」「避難施設」を探してダウンロードします。ブラウザが直接取得できない場合（CORS）は、同梱の <code>run.py</code> で起動すると自動取得されます。</p>
-
-      <h2>対象カテゴリ</h2>
-      <div class="chips" id="catChips"></div>
-
-      <h2>手元のファイルを読み込む</h2>
-      <div class="drop" id="drop">GeoJSON / CZML をここにドロップ<br>（またはクリックして選択）<input type="file" id="fileIn" multiple accept=".geojson,.json,.czml" hidden></div>
-      <p class="hint">G空間情報センターでダウンロードした PLATEAU 関連データ（GeoJSON）もそのまま使えます。</p>
-
-      <div id="dataStatus" class="status">データ未読み込み</div>
-    </section>
-
-    <!-- ② ルート -->
-    <section class="pane" id="pane-route">
-      <h2>GPSで歩きながら記録</h2>
-      <div class="row">
-        <button class="btn" id="locBtn">📍 現在地</button>
-        <button class="btn" id="recBtn">⏺ 記録開始</button>
-      </div>
-      <p class="hint">記録中は歩いた道がルートになり、近くのスポットを画面上部に表示します。記録は端末内に保存され、再読み込みしても残ります。</p>
-      <h2>歩く予定のルートを作る</h2>
-      <div class="row">
-        <input type="text" id="placeQ" placeholder="地名・駅名・住所で検索（例：中目黒駅）">
-        <button class="btn primary" id="placeBtn" style="flex:0 0 auto">検索</button>
-      </div>
-      <div id="placeResults" class="presults"></div>
-      <div class="row" style="margin-top:8px">
-        <button class="btn" id="drawBtn">📍 地図タップで地点を追加</button>
-      </div>
-      <ol class="wps" id="wpList"></ol>
-      <label class="chk"><input type="checkbox" id="snapRoad" checked> 道に沿った徒歩ルートにする</label>
-      <div class="row" style="margin-top:8px">
-        <button class="btn" id="undoBtn">1点戻す</button>
-        <button class="btn" id="revBtn">逆向き</button>
-        <button class="btn" id="clearBtn">全消去</button>
-      </div>
-      <p class="hint">スタート→経由地→ゴールの順に追加します。地図上の番号ピンはドラッグで動かせます。</p>
-      <h2>ファイルから読み込む</h2>
-      <div class="drop" id="routeDrop">GPX / KML / GeoJSON（LineString）をドロップ<br>（またはクリックして選択）<input type="file" id="routeIn" accept=".gpx,.kml,.geojson,.json" hidden></div>
-      <p class="hint">スマホの行動記録アプリ等で書き出した GPX をそのまま使えます。</p>
-
-      <h2>ルートからの距離</h2>
-      <div class="row">
-        <input type="range" id="buffer" min="50" max="1000" step="50" value="200">
-        <b id="bufferVal" style="flex:0 0 70px;text-align:right">200 m</b>
-      </div>
-
-      <h2>サンプル</h2>
-      <button class="btn" id="sampleBtn">目黒川沿い（中目黒→五反田）を読み込む</button>
-      <div id="routeStatus" class="status">ルート未設定</div>
-    </section>
-
-    <!-- ③ 結果 -->
-    <section class="pane" id="pane-result">
-      <div class="stats">
-        <div class="stat"><b id="stLen">–</b><span>ルート距離</span></div>
-        <div class="stat"><b id="stCnt">–</b><span>沿線スポット</span></div>
-        <div class="stat"><b id="stTime">–</b><span>徒歩目安(80m/分)</span></div>
-      </div>
-      <div class="row" style="margin-bottom:8px">
-        <button class="btn" id="csvBtn">CSV出力</button>
-        <button class="btn" id="gjBtn">GeoJSON出力</button>
-      </div>
-      <h2>PLATEAU の沿線スポット</h2>
-      <ol class="spots" id="spotList"></ol>
-      <p class="hint" id="emptyHint">データとルートを設定すると、ルート沿いのスポットがスタート地点からの距離順に並びます。</p>
-
-      <h2>沿線の観光スポット（OpenStreetMap）</h2>
-      <button class="btn primary" id="tBtn" style="width:100%">🔎 ルート沿いの観光スポットを探す</button>
-      <div id="tStatus" class="status" style="display:none"></div>
-      <div class="seg" id="tView" hidden>
-        <button data-v="all" class="on">すべて <span id="tCntAll"></span></button>
-        <button data-v="photo">📷 写真ありのみ <span id="tCntPhoto"></span></button>
-      </div>
-      <div class="chips" id="tChips" style="margin-top:8px"></div>
-      <ol class="spots" id="tList"></ol>
-      <p class="hint">名所・史跡・寺社・博物館・展望スポット・公園などを、無料の地図データ OpenStreetMap から探します（APIキー不要）。見つかったスポットは地図と動画にも表示されます。</p>
-
-      <h2>Google マップでも探す</h2>
-      <div id="gLinks" class="glinks"></div>
-      <p class="hint">↑ ボタンでルート上の各地点の周辺を Google マップで開きます（APIキー不要）。</p>
-      <details class="gbox" id="gBox">
-        <summary>APIキーを使って一覧表示する（任意）</summary>
         <div class="row" style="margin-top:8px">
-          <input type="password" id="gKey" placeholder="Google Maps Platform APIキー" autocomplete="off">
-          <button class="btn" id="gKeySave" style="flex:0 0 auto">保存</button>
+          <input type="text" id="areaCode" value="13100" placeholder="市区町村コード（カンマ区切り可）">
+          <button class="btn primary" id="fetchApi" style="flex:0 0 auto">取得</button>
         </div>
-        <p class="hint">「Maps JavaScript API」と「Places API (New)」を有効にしたキーが必要です。キーはこの端末内だけに保存されます。キーには必ず「ウェブサイトの制限」で <code>saractofficial.github.io/*</code> を設定してください。</p>
-        <button class="btn primary" id="gSearch" style="width:100%">Google でおすすめを探す</button>
-        <div id="gStatus" class="status" style="display:none"></div>
-      </details>
-      <ol class="spots" id="gList"></ol>
-      <div id="gAttr" class="gattr" style="display:none">Google Maps</div>
-    </section>
-
-    <!-- ④ 動画 -->
-    <section class="pane" id="pane-video">
-      <h2>歩くイメージを動画にする</h2>
-      <p class="hint">光る ◯ がルートを歩き、青い軌跡を描くアニメーションを作ります。近くを通ると観光スポットが地図上に現れます。</p>
-      <label>タイトル</label>
-      <input type="text" id="vTitle" value="あるく行路" maxlength="30">
-      <div class="row" style="margin-top:10px">
-        <div><label>画面の形</label>
-          <select id="vRatio"><option value="9:16">縦長 9:16（リール・ストーリー）</option><option value="1:1">正方形 1:1</option><option value="16:9">横長 16:9</option></select></div>
+        <div id="dataStatus" class="status">データ未読み込み</div>
       </div>
-      <div class="row" style="margin-top:8px">
-        <div><label>長さ</label>
-          <select id="vDur"><option value="8">8秒</option><option value="12" selected>12秒</option><option value="20">20秒</option><option value="30">30秒</option></select></div>
-        <div><label>背景地図</label>
-          <select id="vBase"><option value="night">ナイト（濃紺）</option><option value="pale">淡色地図</option><option value="std">標準地図</option><option value="seamlessphoto">航空写真</option></select></div>
+      <div class="card">
+        <h3>対象カテゴリ</h3>
+        <div class="chips" id="catChips"></div>
       </div>
-      <label class="chk"><input type="checkbox" id="vTour" checked> 観光スポットを順に表示する（OpenStreetMap）</label>
-      <label class="chk"><input type="checkbox" id="vSpots"> PLATEAU のスポットも表示する</label>
-      <button class="btn primary" id="vOpen" style="width:100%;margin-top:10px">🎬 プレビューを開く</button>
-      <p class="hint">プレビュー画面で「動画を作る」を押すと、アニメーションを録画して保存できます。iPhone は共有メニューの「ビデオを保存」で写真アプリに入ります。</p>
+      <div class="card">
+        <h3>手元のファイルを読み込む</h3>
+        <div class="drop" id="drop">GeoJSON / CZML を選択<input type="file" id="fileIn" multiple accept=".geojson,.json,.czml" hidden></div>
+      </div>
     </section>
-  </aside>
-
-  <div id="mapwrap">
-    <div id="map"></div>
-    <div class="km" id="drawTip">地図をタップしてルートの点を追加（もう一度ボタンで終了）</div>
-    <div class="near" id="nearBox"></div>
-    <button class="fab" id="fabStop">⏹ 記録停止</button>
+    </div>
   </div>
+
+  <!-- 下部タブバー -->
+  <nav class="tabs tabbar">
+    <button data-tab="route" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H16a3.5 3.5 0 0 0 0-7H8a3.5 3.5 0 0 1 0-7h7.5"/></svg>ルート</button>
+    <button data-tab="result"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg>スポット</button>
+    <button data-tab="video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="14" height="14" rx="3"/><path d="m17 10 4-2.5v9L17 14"/></svg>動画</button>
+    <button data-tab="data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>データ</button>
+  </nav>
 </div>
 
 <!-- 動画プレビュー -->
@@ -322,16 +389,41 @@ const NAME_KEYS = ["名称","name","Name","NAME","施設名称","施設名","ラ
 const state = { features: [], route: [], drawing:false, buffer:200, results:[], recording:false };
 
 /* ========= 地図 ========= */
-const map = L.map("map", {zoomControl:true}).setView([35.6339, 139.7080], 14);
-const gsiPale = L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png",
-  {maxZoom:18, attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a> | 3D都市モデル: <a href="https://www.mlit.go.jp/plateau/" target="_blank">PLATEAU</a>（国土交通省）'});
-const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  {maxZoom:19, attribution:'&copy; OpenStreetMap contributors | PLATEAU（国土交通省）'});
-const gsiPhoto = L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
-  {maxZoom:18, attribution:'地理院タイル（写真） | PLATEAU（国土交通省）'});
-gsiPale.addTo(map);
-L.control.layers({"地理院 淡色":gsiPale,"OpenStreetMap":osm,"航空写真":gsiPhoto},{}, {position:"topright"}).addTo(map);
-L.control.scale({imperial:false}).addTo(map);
+const map = L.map("map", {zoomControl:false, attributionControl:false}).setView([35.6339, 139.7080], 15);
+L.control.attribution({position:"topleft", prefix:false}).addTo(map);
+if(matchMedia("(min-width:900px)").matches) L.control.zoom({position:"bottomright"}).addTo(map);
+const ATTR_GSI='<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>';
+const ATTR_OSM='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>';
+const ATTR_PL='PLATEAU（国土交通省）';
+const carto=(style)=>L.tileLayer(`https://{s}.basemaps.cartocdn.com/rastertiles/${style}/{z}/{x}/{y}{r}.png`,{subdomains:"abcd",maxZoom:20,attribution:ATTR_OSM+" | "+ATTR_PL});
+// 地図の種類（最初は航空写真＋地名ラベル）
+const BASES={
+  photo:  {label:"航空写真", thumb:"linear-gradient(135deg,#3f5f3a,#6b7f5a 45%,#8a8f86)", make:()=>L.layerGroup([
+            L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",{maxZoom:19,maxNativeZoom:18,attribution:ATTR_GSI+"（写真） | "+ATTR_PL}),
+            L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:20,attribution:ATTR_OSM})])},
+  modern: {label:"モダン", thumb:"linear-gradient(135deg,#f6f1e7,#e8eef5 50%,#bfe3c0)", make:()=>carto("voyager")},
+  light:  {label:"ライト", thumb:"linear-gradient(135deg,#fafafa,#e9ecef)", make:()=>carto("light_all")},
+  dark:   {label:"ダーク", thumb:"linear-gradient(135deg,#1f2937,#0f172a)", make:()=>carto("dark_all")},
+  gsi:    {label:"地理院", thumb:"linear-gradient(135deg,#f3efe4,#dfe9d6)", make:()=>L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png",{maxZoom:19,maxNativeZoom:18,attribution:ATTR_GSI+" | "+ATTR_PL})},
+  osm:    {label:"OSM", thumb:"linear-gradient(135deg,#f2efe9,#aad3df)", make:()=>L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap contributors | "+ATTR_PL})},
+};
+let baseKey="photo", baseLayer=null;
+try{ const k=localStorage.getItem("pw_base"); if(k&&BASES[k]) baseKey=k; }catch(e){}
+function setBase(k){
+  if(baseLayer) map.removeLayer(baseLayer);
+  baseKey=k; baseLayer=BASES[k].make().addTo(map); baseLayer.bringToBack&&baseLayer.bringToBack();
+  try{ localStorage.setItem("pw_base",k); }catch(e){}
+  document.querySelectorAll("#layerMenu button").forEach(b=>b.classList.toggle("on",b.dataset.k===k));
+}
+(function(){
+  const menu=document.getElementById("layerMenu");
+  Object.entries(BASES).forEach(([k,b])=>{ const el=document.createElement("button"); el.dataset.k=k;
+    el.innerHTML=`<i style="background:${b.thumb}"></i>${b.label}`; el.onclick=()=>{ setBase(k); menu.hidden=true; }; menu.appendChild(el); });
+  document.getElementById("layerBtn").onclick=e=>{ e.stopPropagation(); menu.hidden=!menu.hidden; };
+  document.addEventListener("click",e=>{ if(!menu.hidden && !menu.contains(e.target)) menu.hidden=true; });
+})();
+setBase(baseKey);
+L.control.scale({imperial:false, position:"topleft"}).addTo(map);
 
 const corridorLayer = L.layerGroup().addTo(map);
 const routeLayer = L.layerGroup().addTo(map);
@@ -341,9 +433,38 @@ const hitLayer = L.layerGroup().addTo(map);   // 沿線スポット（番号付�
 /* ========= UI: タブ ========= */
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
 function showTab(t){
+  const same=document.querySelector(".tabs button.on")?.dataset.tab===t;
   document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));
   document.querySelectorAll(".pane").forEach(p=>p.classList.toggle("on",p.id==="pane-"+t));
+  document.getElementById("sheetBody").scrollTop=0;
+  if(sheet.state==="peek" || (same && sheet.state!=="full")) sheetTo(same&&sheet.state==="half"?"full":"half");
 }
+/* ========= ボトムシート（ドラッグで3段階） ========= */
+const sheet={el:document.getElementById("sheet"), state:"peek"};
+const isWide=()=>matchMedia("(min-width:900px)").matches;
+function sheetOffset(st){
+  const h=sheet.el.offsetHeight, peek=128, half=Math.min(h, innerHeight*0.48);
+  return st==="full" ? 0 : st==="half" ? Math.max(0,h-half) : Math.max(0,h-peek);
+}
+function sheetTo(st){ sheet.state=st; const body=document.getElementById("sheetBody");
+  if(isWide()){ body.style.paddingBottom=""; return; }
+  const off=sheetOffset(st); sheet.el.style.transform=`translateY(${off}px)`;
+  body.style.paddingBottom=`calc(${off+24}px + env(safe-area-inset-bottom))`;   // 隠れている分だけ余白を足して最後までスクロールできるように
+}
+(function(){
+  const grab=document.getElementById("grab"); let y0=0, off0=0, cur=0, t0=0, drag=false;
+  const down=e=>{ if(isWide()) return; drag=true; y0=e.clientY; off0=sheetOffset(sheet.state); cur=off0; t0=Date.now(); sheet.el.classList.add("dragging"); grab.setPointerCapture&&grab.setPointerCapture(e.pointerId); };
+  const move=e=>{ if(!drag) return; cur=Math.max(0, Math.min(sheetOffset("peek"), off0+(e.clientY-y0))); sheet.el.style.transform=`translateY(${cur}px)`; };
+  const up=e=>{ if(!drag) return; drag=false; sheet.el.classList.remove("dragging");
+    const v=(cur-off0)/Math.max(1,Date.now()-t0);                   // 速さ（px/ms）
+    if(Math.abs(cur-off0)<6){ sheetTo(sheet.state==="peek"?"half":sheet.state==="half"?"full":"half"); return; }   // タップ
+    const cands=["full","half","peek"].map(s=>[s,Math.abs(sheetOffset(s)-(cur+v*180))]).sort((a,b)=>a[1]-b[1]);
+    sheetTo(cands[0][0]); };
+  grab.addEventListener("pointerdown",down); grab.addEventListener("pointermove",move);
+  grab.addEventListener("pointerup",up); grab.addEventListener("pointercancel",up);
+  addEventListener("resize",()=>sheetTo(sheet.state));
+  requestAnimationFrame(()=>sheetTo("peek"));
+})();
 
 /* ========= カテゴリチップ ========= */
 const chipBox = document.getElementById("catChips");
@@ -581,7 +702,10 @@ state.wps = [];           // [{ll:[lat,lng], name}]
 const wpLayer = L.layerGroup().addTo(map);
 const drawBtn=document.getElementById("drawBtn");
 const snapEl=document.getElementById("snapRoad");
+document.getElementById("fabDraw").onclick=()=>drawBtn.click();
+map.on("click",()=>{ document.getElementById("placeResults").innerHTML=""; if(!state.drawing && sheet.state!=="peek") sheetTo("peek"); });
 drawBtn.onclick=()=>{ state.drawing=!state.drawing; drawBtn.classList.toggle("on",state.drawing);
+  document.getElementById("fabDraw").classList.toggle("on",state.drawing); if(state.drawing) sheetTo("peek");
   drawBtn.textContent = state.drawing ? "✅ 地点の追加を終了" : "📍 地図タップで地点を追加";
   document.getElementById("drawTip").style.display = state.drawing?"block":"none";
   map.getContainer().style.cursor = state.drawing ? "crosshair" : ""; };
@@ -751,7 +875,7 @@ function analyze(){
   const len=routeLength(state.route);
   document.getElementById("stLen").textContent = state.route.length>1 ? (len/1000).toFixed(2)+"km" : "–";
   document.getElementById("stTime").textContent = state.route.length>1 ? Math.round(len/80)+"分" : "–";
-  if(state.route.length<2 || !state.features.length){ document.getElementById("stCnt").textContent="–"; document.getElementById("emptyHint").style.display="block"; state.results=[]; return; }
+  if(state.route.length<2 || !state.features.length){ if(!state.tour) document.getElementById("stCnt").textContent="–"; document.getElementById("emptyHint").style.display="block"; state.results=[]; return; }
   const cum=[0]; for(let i=1;i<state.route.length;i++) cum.push(cum[i-1]+haversine(state.route[i-1],state.route[i]));
   // バウンディングボックスで前処理（高速化）
   const dLat=state.buffer/111000*1.2, dLng=dLat/Math.cos(toRad(state.route[0][0]));
@@ -766,7 +890,7 @@ function analyze(){
   }
   res.sort((a,b)=>a.along-b.along);
   state.results=res;
-  document.getElementById("stCnt").textContent=res.length+"件";
+  if(!state.tour) document.getElementById("stCnt").textContent=res.length+"件";
   document.getElementById("emptyHint").style.display = res.length ? "none":"block";
   if(!res.length) document.getElementById("emptyHint").textContent="この範囲にスポットが見つかりませんでした。距離を広げるか、ルート周辺のデータを読み込んでください。";
   res.forEach((r,i)=>{
@@ -1138,6 +1262,7 @@ function renderTour(){
   seg.hidden=!all.length;
   document.getElementById("tCntAll").textContent=`(${all.length})`;
   document.getElementById("tCntPhoto").textContent=`(${all.filter(t=>t.photo).length})`;
+  if(all.length) document.getElementById("stCnt").textContent=all.length+"件";
   const gal = state.tourView==="photo";
   ul.classList.toggle("gallery", gal);
   const shown=all.filter(t=>T_CATS[t.cat].on && (!gal || t.photo));
@@ -1188,7 +1313,10 @@ async function vPrepare(){
   V.W=W; V.H=H; V.top=top; V.bottom=bottom;
   // 背景タイル
   const sel=document.getElementById("vBase").value, night= sel==="night", base= night ? "pale" : sel, ext = base==="seamlessphoto" ? "jpg" : "png";
-  V.night = night || sel==="seamlessphoto";
+  V.night = night || sel==="seamlessphoto" || sel==="dark";
+  const isCarto = base==="voyager" || base==="dark";
+  const tileUrl=(z,x,y)=> isCarto ? `https://${"abcd"[(x+y)%4]}.basemaps.cartocdn.com/rastertiles/${base==="dark"?"dark_all":"voyager"}/${z}/${x}/${y}.png`
+                                  : `https://cyberjapandata.gsi.go.jp/xyz/${base}/${z}/${x}/${y}.${ext}`;
   const wx0=cpx[0]-cx/scale, wy0=cpx[1]-cy/scale, wx1=cpx[0]+(W-cx)/scale, wy1=cpx[1]+(H-cy)/scale;
   const tx0=Math.floor(wx0/256), ty0=Math.floor(wy0/256), tx1=Math.floor(wx1/256), ty1=Math.floor(wy1/256);
   const bg=document.createElement("canvas"); bg.width=W; bg.height=H; const g=bg.getContext("2d");
@@ -1198,7 +1326,7 @@ async function vPrepare(){
   for(let tx=tx0;tx<=tx1;tx++) for(let ty=ty0;ty<=ty1;ty++){
     const n=2**z; if(ty<0||ty>=n) continue; const x=((tx%n)+n)%n;
     totalT++;
-    jobs.push(loadImg(`https://cyberjapandata.gsi.go.jp/xyz/${base}/${z}/${x}/${ty}.${ext}`).then(im=>{ if(im) g.drawImage(im,(tx*256-cpx[0])*scale+cx,(ty*256-cpx[1])*scale+cy,256*scale+0.5,256*scale+0.5);
+    jobs.push(loadImg(tileUrl(z,x,ty)).then(im=>{ if(im) g.drawImage(im,(tx*256-cpx[0])*scale+cx,(ty*256-cpx[1])*scale+cy,256*scale+0.5,256*scale+0.5);
       doneT++; vMsg(`地図を読み込み中… ${(doneT/totalT*100).toFixed(2)}%`); }));
   }
   await Promise.all(jobs);
@@ -1207,7 +1335,7 @@ async function vPrepare(){
     g.globalCompositeOperation="difference"; g.fillStyle="#fff"; g.fillRect(0,0,W,H);
     g.globalCompositeOperation="multiply"; g.fillStyle="#4a6fa8"; g.fillRect(0,0,W,H);
     g.globalCompositeOperation="source-over"; g.fillStyle="rgba(8,20,48,.25)"; g.fillRect(0,0,W,H);
-  } else if(sel==="seamlessphoto"){ g.fillStyle="rgba(8,20,48,.35)"; g.fillRect(0,0,W,H); }
+  } else if(sel==="seamlessphoto"||sel==="dark"){ g.fillStyle= sel==="dark" ? "rgba(8,20,48,.2)" : "rgba(8,20,48,.35)"; g.fillRect(0,0,W,H); }
   else { g.fillStyle="rgba(239,246,255,.35)"; g.fillRect(0,0,W,H); }
   const vg=g.createRadialGradient(W/2,H/2,Math.min(W,H)*0.35,W/2,H/2,Math.max(W,H)*0.75);
   vg.addColorStop(0,"rgba(2,6,23,0)"); vg.addColorStop(1, night ? "rgba(2,6,23,.55)" : "rgba(2,6,23,.25)"); g.fillStyle=vg; g.fillRect(0,0,W,H);
@@ -1234,6 +1362,7 @@ async function vPrepare(){
   V.dur=+document.getElementById("vDur").value;
   vMsg("");
 }
+function isCartoV(){ const v=document.getElementById("vBase").value; return v==="voyager"||v==="dark"; }
 function drawCover(g,img,x,y,w,h){ const ir=img.width/img.height, r=w/h; let sw=img.width, sh=img.height, sx=0, sy=0;
   if(ir>r){ sw=sh*r; sx=(img.width-sw)/2; } else { sh=sw/r; sy=(img.height-sh)/2; } g.drawImage(img,sx,sy,sw,sh,x,y,w,h); }
 function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
@@ -1350,7 +1479,7 @@ function vFrame(prog, tSec){
     g.globalAlpha=1;
   }
   g.textBaseline="alphabetic"; g.font=`400 ${10.5*u}px sans-serif`; g.fillStyle="rgba(255,255,255,.6)"; g.textAlign="right";
-  g.fillText("地図：国土地理院 / スポット：© OpenStreetMap contributors / 写真：Wikimedia Commons / PLATEAU", W-12*u, H-8*u);
+  g.fillText((isCartoV()?"地図：© OpenStreetMap © CARTO":"地図：国土地理院")+" / スポット：© OpenStreetMap contributors / 写真：Wikimedia Commons / PLATEAU", W-12*u, H-8*u);
   g.restore();
 }
 function vAnimate(onEnd){
