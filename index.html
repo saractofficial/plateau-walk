@@ -67,6 +67,30 @@
   .fab{position:absolute;z-index:600;left:50%;transform:translateX(-50%);bottom:24px;display:none;padding:12px 22px;border-radius:999px;border:0;background:#d6452b;color:#fff;font:inherit;font-size:15px;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.3)}
   .btn.rec{background:#d6452b;border-color:#d6452b;color:#fff;animation:blink 1.6s infinite}
   @keyframes blink{50%{opacity:.75}}
+  .presults{margin-top:6px}
+  .presults button{display:block;width:100%;text-align:left;padding:8px 10px;margin-top:4px;border:1px solid var(--line);border-radius:8px;background:#fff;font:inherit;font-size:13px;cursor:pointer}
+  .presults button small{color:var(--sub)}
+  ol.wps{list-style:none;margin:8px 0 0;padding:0}
+  ol.wps li{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+  ol.wps li .wn{flex:0 0 26px;height:26px;border-radius:50%;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  ol.wps li span.wname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  ol.wps li button{border:0;background:none;font-size:15px;cursor:pointer;color:var(--sub);padding:4px 6px}
+  .chk{display:flex;align-items:center;gap:6px;margin-top:10px}
+  .wpin{width:26px;height:26px;border-radius:50%;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4)}
+  .glinks{display:flex;flex-wrap:wrap;gap:6px}
+  .glinks a{font-size:12px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--ink);background:#fff}
+  .gbox{margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+  .gbox summary{font-size:13px;cursor:pointer}
+  .gattr{font-family:Roboto,Arial,sans-serif;font-size:13px;color:#5e5e5e;margin:6px 0 0;text-align:right}
+  .star{color:#e8a10c}
+  .vmodal{position:fixed;inset:0;z-index:2000;background:#111;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+  .vmodal[hidden]{display:none}
+  .vbar{display:flex;align-items:center;gap:10px;padding:10px}
+  .vmsg{color:#ddd;font-size:13px}
+  .vstage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 10px}
+  .vstage canvas,.vstage video{max-width:100%;max-height:100%;border-radius:10px;background:#222}
+  .vctrl{display:flex;gap:8px;padding:10px}
+  .vctrl .btn{flex:1}
   @media (max-width:820px){
     #app{grid-template-columns:1fr;grid-template-rows:58dvh 42dvh;height:100dvh}
     .btn{padding:11px 12px;font-size:14px}
@@ -87,7 +111,8 @@
     <div class="tabs">
       <button data-tab="data" class="on">① データ</button>
       <button data-tab="route">② ルート</button>
-      <button data-tab="result">③ 沿線スポット</button>
+      <button data-tab="result">③ スポット</button>
+      <button data-tab="video">④ 動画</button>
     </div>
 
     <!-- ① データ -->
@@ -130,14 +155,23 @@
         <button class="btn" id="recBtn">⏺ 記録開始</button>
       </div>
       <p class="hint">記録中は歩いた道がルートになり、近くのスポットを画面上部に表示します。記録は端末内に保存され、再読み込みしても残ります。</p>
-      <h2>ルートを描く</h2>
+      <h2>歩く予定のルートを作る</h2>
       <div class="row">
-        <button class="btn" id="drawBtn">✏️ 地図をタップして描く</button>
+        <input type="text" id="placeQ" placeholder="地名・駅名・住所で検索（例：中目黒駅）">
+        <button class="btn primary" id="placeBtn" style="flex:0 0 auto">検索</button>
       </div>
+      <div id="placeResults" class="presults"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="drawBtn">📍 地図タップで地点を追加</button>
+      </div>
+      <ol class="wps" id="wpList"></ol>
+      <label class="chk"><input type="checkbox" id="snapRoad" checked> 道に沿った徒歩ルートにする</label>
       <div class="row" style="margin-top:8px">
         <button class="btn" id="undoBtn">1点戻す</button>
+        <button class="btn" id="revBtn">逆向き</button>
         <button class="btn" id="clearBtn">全消去</button>
       </div>
+      <p class="hint">スタート→経由地→ゴールの順に追加します。地図上の番号ピンはドラッグで動かせます。</p>
       <h2>ファイルから読み込む</h2>
       <div class="drop" id="routeDrop">GPX / KML / GeoJSON（LineString）をドロップ<br>（またはクリックして選択）<input type="file" id="routeIn" accept=".gpx,.kml,.geojson,.json" hidden></div>
       <p class="hint">スマホの行動記録アプリ等で書き出した GPX をそのまま使えます。</p>
@@ -164,8 +198,46 @@
         <button class="btn" id="csvBtn">CSV出力</button>
         <button class="btn" id="gjBtn">GeoJSON出力</button>
       </div>
+      <h2>PLATEAU の沿線スポット</h2>
       <ol class="spots" id="spotList"></ol>
       <p class="hint" id="emptyHint">データとルートを設定すると、ルート沿いのスポットがスタート地点からの距離順に並びます。</p>
+
+      <h2>Google のおすすめ観光スポット</h2>
+      <div id="gLinks" class="glinks"></div>
+      <p class="hint">↑ ボタンでルート上の各地点の周辺を Google マップで開きます（APIキー不要）。</p>
+      <details class="gbox" id="gBox">
+        <summary>APIキーを使って一覧表示する（任意）</summary>
+        <div class="row" style="margin-top:8px">
+          <input type="password" id="gKey" placeholder="Google Maps Platform APIキー" autocomplete="off">
+          <button class="btn" id="gKeySave" style="flex:0 0 auto">保存</button>
+        </div>
+        <p class="hint">「Maps JavaScript API」と「Places API (New)」を有効にしたキーが必要です。キーはこの端末内だけに保存されます。キーには必ず「ウェブサイトの制限」で <code>saractofficial.github.io/*</code> を設定してください。</p>
+        <button class="btn primary" id="gSearch" style="width:100%">Google でおすすめを探す</button>
+        <div id="gStatus" class="status" style="display:none"></div>
+      </details>
+      <ol class="spots" id="gList"></ol>
+      <div id="gAttr" class="gattr" style="display:none">Google Maps</div>
+    </section>
+
+    <!-- ④ 動画 -->
+    <section class="pane" id="pane-video">
+      <h2>歩くイメージを動画にする</h2>
+      <p class="hint">◯ がルートを歩いて軌跡を描くアニメーションを作ります。途中で PLATEAU の沿線スポットが順に表示されます。</p>
+      <label>タイトル</label>
+      <input type="text" id="vTitle" value="あるく行路" maxlength="30">
+      <div class="row" style="margin-top:10px">
+        <div><label>画面の形</label>
+          <select id="vRatio"><option value="9:16">縦長 9:16（リール・ストーリー）</option><option value="1:1">正方形 1:1</option><option value="16:9">横長 16:9</option></select></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div><label>長さ</label>
+          <select id="vDur"><option value="8">8秒</option><option value="12" selected>12秒</option><option value="20">20秒</option><option value="30">30秒</option></select></div>
+        <div><label>背景地図</label>
+          <select id="vBase"><option value="pale">淡色地図</option><option value="std">標準地図</option><option value="seamlessphoto">航空写真</option></select></div>
+      </div>
+      <label class="chk"><input type="checkbox" id="vSpots" checked> 沿線スポットを表示する</label>
+      <button class="btn primary" id="vOpen" style="width:100%;margin-top:10px">🎬 プレビューを開く</button>
+      <p class="hint">プレビュー画面で「動画を作る」を押すと、アニメーションを録画して保存できます。iPhone は共有メニューの「ビデオを保存」で写真アプリに入ります。</p>
     </section>
   </aside>
 
@@ -174,6 +246,24 @@
     <div class="km" id="drawTip">地図をタップしてルートの点を追加（もう一度ボタンで終了）</div>
     <div class="near" id="nearBox"></div>
     <button class="fab" id="fabStop">⏹ 記録停止</button>
+  </div>
+</div>
+
+<!-- 動画プレビュー -->
+<div id="vModal" class="vmodal" hidden>
+  <div class="vbar">
+    <button class="btn" id="vClose">✕ 閉じる</button>
+    <span id="vMsg" class="vmsg"></span>
+  </div>
+  <div class="vstage"><canvas id="vCanvas"></canvas><video id="vVideo" playsinline controls hidden></video></div>
+  <div class="vctrl">
+    <button class="btn" id="vPlay">▶ 再生</button>
+    <button class="btn primary" id="vRec">🎥 動画を作る</button>
+    <button class="btn" id="vPng">📷 画像</button>
+  </div>
+  <div class="vctrl" id="vSaveRow" hidden>
+    <button class="btn primary" id="vShare">📲 写真に保存 / 共有</button>
+    <button class="btn" id="vDl">⬇ ダウンロード</button>
   </div>
 </div>
 
@@ -451,14 +541,98 @@ setupDrop("drop","fileIn", async files=>{
 function fitToData(){ if(state.route.length<2 && state.features.length){ map.fitBounds(L.latLngBounds(state.features.map(f=>f.ll)).pad(0.05)); } }
 
 /* ========= ルート ========= */
+/* --- 予定ルート（地点＋徒歩ルート） --- */
+state.wps = [];           // [{ll:[lat,lng], name}]
+const wpLayer = L.layerGroup().addTo(map);
 const drawBtn=document.getElementById("drawBtn");
+const snapEl=document.getElementById("snapRoad");
 drawBtn.onclick=()=>{ state.drawing=!state.drawing; drawBtn.classList.toggle("on",state.drawing);
-  drawBtn.textContent = state.drawing ? "✅ 描画を終了" : "✏️ 地図をタップして描く";
+  drawBtn.textContent = state.drawing ? "✅ 地点の追加を終了" : "📍 地図タップで地点を追加";
   document.getElementById("drawTip").style.display = state.drawing?"block":"none";
   map.getContainer().style.cursor = state.drawing ? "crosshair" : ""; };
-map.on("click", e=>{ if(!state.drawing) return; state.route.push([e.latlng.lat,e.latlng.lng]); routeChanged(false); });
-document.getElementById("undoBtn").onclick=()=>{ state.route.pop(); routeChanged(false); };
-document.getElementById("clearBtn").onclick=()=>{ state.route=[]; routeChanged(false); };
+map.on("click", e=>{ if(!state.drawing) return; addWp([e.latlng.lat,e.latlng.lng], null); });
+document.getElementById("undoBtn").onclick=()=>{ if(state.wps.length){ state.wps.pop(); wpsChanged(); } else { state.route.pop(); routeChanged(false);} };
+document.getElementById("clearBtn").onclick=()=>{ state.wps=[]; state.route=[]; wpsChanged(); };
+document.getElementById("revBtn").onclick=()=>{ if(state.wps.length){ state.wps.reverse(); wpsChanged(); } else { state.route.reverse(); routeChanged(false);} };
+snapEl.onchange=()=>buildRoute();
+
+function wpColor(i,n){ return i===0 ? "#0b6e4f" : i===n-1 ? "#d6452b" : "#1f2328"; }
+function wpLabel(i,n){ return i===0 ? "S" : (i===n-1 && n>1) ? "G" : String(i); }
+async function addWp(ll, name){
+  const w={ll, name: name||null}; state.wps.push(w);
+  if(!name) reverseName(w);  // 地名を後から付ける
+  wpsChanged();
+}
+function wpsChanged(){
+  renderWps(); buildRoute();
+  try{ localStorage.setItem("pw_wps", JSON.stringify(state.wps)); }catch(e){}
+}
+function renderWps(){
+  wpLayer.clearLayers();
+  const n=state.wps.length, ul=document.getElementById("wpList"); ul.innerHTML="";
+  state.wps.forEach((w,i)=>{
+    const m=L.marker(w.ll,{draggable:true, icon:L.divIcon({className:"",html:`<div class="wpin" style="background:${wpColor(i,n)}">${wpLabel(i,n)}</div>`,iconSize:[26,26],iconAnchor:[13,13]})}).addTo(wpLayer);
+    m.on("dragend",()=>{ const p=m.getLatLng(); w.ll=[p.lat,p.lng]; w.name=null; reverseName(w); wpsChanged(); });
+    const li=document.createElement("li");
+    li.innerHTML=`<span class="wn" style="background:${wpColor(i,n)}">${wpLabel(i,n)}</span><span class="wname">${esc(w.name||`${w.ll[0].toFixed(4)}, ${w.ll[1].toFixed(4)}`)}</span>
+      <button data-a="up" title="上へ">▲</button><button data-a="dn" title="下へ">▼</button><button data-a="del" title="削除">✕</button>`;
+    li.querySelector('[data-a=up]').onclick=()=>{ if(i>0){ [state.wps[i-1],state.wps[i]]=[state.wps[i],state.wps[i-1]]; wpsChanged(); } };
+    li.querySelector('[data-a=dn]').onclick=()=>{ if(i<n-1){ [state.wps[i+1],state.wps[i]]=[state.wps[i],state.wps[i+1]]; wpsChanged(); } };
+    li.querySelector('[data-a=del]').onclick=()=>{ state.wps.splice(i,1); wpsChanged(); };
+    li.querySelector('.wname').onclick=()=>map.setView(w.ll, Math.max(map.getZoom(),16));
+    ul.appendChild(li);
+  });
+}
+// 地点名：国土地理院の逆ジオコーダ
+async function reverseName(w){
+  try{
+    const r=await fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lat=${w.ll[0]}&lon=${w.ll[1]}`);
+    const j=await r.json(); const a=j.results; if(a && a.lv01Nm && !w.name){ w.name=a.lv01Nm.replace(/^－$/,"")||null; renderWps(); }
+  }catch(e){}
+}
+// 徒歩ルート：FOSSGIS の OSRM（徒歩プロファイル）。失敗時は直線でつなぐ
+let routeSeq=0;
+async function buildRoute(){
+  const seq=++routeSeq, pts=state.wps.map(w=>w.ll);
+  if(pts.length<2 || !snapEl.checked){ state.route=pts.slice(); routeChanged(false); return; }
+  setStatus("routeStatus","徒歩ルートを計算中…");
+  try{
+    const coords=pts.map(p=>`${p[1].toFixed(6)},${p[0].toFixed(6)}`).join(";");
+    const r=await fetch(`https://routing.openstreetmap.de/routed-foot/route/v1/foot/${coords}?overview=full&geometries=geojson`);
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j=await r.json(); if(seq!==routeSeq) return;
+    if(j.code!=="Ok"||!j.routes||!j.routes.length) throw new Error(j.code||"no route");
+    state.route=j.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
+    routeChanged(false);
+  }catch(e){
+    if(seq!==routeSeq) return;
+    state.route=pts.slice(); routeChanged(false);
+    setStatus("routeStatus",`道に沿ったルートを取得できなかったため、直線でつなぎました（${e.message}）`,true);
+  }
+}
+// 地点検索：国土地理院 → 見つからなければ OpenStreetMap(Nominatim)
+document.getElementById("placeBtn").onclick=searchPlace;
+document.getElementById("placeQ").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); searchPlace(); } });
+async function searchPlace(){
+  const q=document.getElementById("placeQ").value.trim(); if(!q) return;
+  const box=document.getElementById("placeResults"); box.innerHTML='<p class="hint">検索中…</p>';
+  let items=[];
+  try{
+    const r=await fetch("https://msearch.gsi.go.jp/address-search/AddressSearch?q="+encodeURIComponent(q));
+    const j=await r.json(); items=j.slice(0,6).map(f=>({ll:[f.geometry.coordinates[1],f.geometry.coordinates[0]], name:f.properties.title, sub:"国土地理院"}));
+  }catch(e){}
+  try{
+    const r=await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=jp&accept-language=ja&q="+encodeURIComponent(q));
+    const j=await r.json(); items=j.map(x=>({ll:[+x.lat,+x.lon], name:(x.name||x.display_name.split(",")[0]), sub:x.display_name.split(",").slice(1,3).join(" ")})).concat(items);
+  }catch(e){}
+  box.innerHTML="";
+  if(!items.length){ box.innerHTML='<p class="hint">見つかりませんでした。別の言い方で試すか、地図タップで追加してください。</p>'; return; }
+  items.slice(0,8).forEach(it=>{
+    const b=document.createElement("button"); b.innerHTML=`➕ ${esc(it.name)} <small>${esc(it.sub||"")}</small>`;
+    b.onclick=()=>{ addWp(it.ll,it.name); box.innerHTML=""; document.getElementById("placeQ").value=""; map.setView(it.ll, Math.max(map.getZoom(),15)); };
+    box.appendChild(b);
+  });
+}
 const bufEl=document.getElementById("buffer");
 bufEl.oninput=()=>{ state.buffer=+bufEl.value; document.getElementById("bufferVal").textContent=state.buffer+" m"; drawCorridor(); analyze(); };
 
@@ -492,13 +666,13 @@ function thin(pts){ const o=[]; for(const p of pts){ if(!isFinite(p[0])||!isFini
 setupDrop("routeDrop","routeIn", async files=>{
   const f=files[0]; if(!f) return;
   try{ const pts=thin(parseRouteFile(await f.text(), f.name)); if(pts.length<2) throw new Error("線データが見つかりません");
-    state.route=pts; routeChanged(true); setStatus("routeStatus",`${f.name} を読み込みました（${pts.length}点）`); }
+    state.wps=[]; renderWps(); state.route=pts; state.autoResult=true; routeChanged(true); setStatus("routeStatus",`${f.name} を読み込みました（${pts.length}点）`); }
   catch(e){ setStatus("routeStatus",`${f.name}：${e.message}`,true); }
 });
 document.getElementById("sampleBtn").onclick=()=>{
   // 中目黒駅 → 目黒川沿い → 五反田駅（概略）
-  state.route=[[35.6442,139.6990],[35.6430,139.7012],[35.6411,139.7040],[35.6385,139.7068],[35.6358,139.7098],[35.6338,139.7130],[35.6322,139.7160],[35.6305,139.7190],[35.6290,139.7220],[35.6265,139.7238]];
-  routeChanged(true);
+  state.wps=[{ll:[35.6442,139.6985],name:"中目黒駅"},{ll:[35.6358,139.7098],name:"目黒川（太鼓橋付近）"},{ll:[35.6262,139.7236],name:"五反田駅"}];
+  state.autoResult=true; wpsChanged(); map.fitBounds(L.latLngBounds(state.wps.map(w=>w.ll)).pad(0.2));
 };
 
 function routeChanged(fit){
@@ -510,7 +684,7 @@ function routeChanged(fit){
     if(fit && state.route.length>1) map.fitBounds(L.latLngBounds(state.route).pad(0.15));
   }
   const len=routeLength(state.route);
-  if(!state.drawing || state.route.length) setStatus("routeStatus", state.route.length>1 ? `ルート ${state.route.length}点・${(len/1000).toFixed(2)} km` : state.route.length ? "あと1点以上クリックしてください" : "ルート未設定");
+  if(!state.drawing || state.route.length) setStatus("routeStatus", state.route.length>1 ? `ルート ${state.route.length}点・${(len/1000).toFixed(2)} km` : state.route.length ? "あと1地点以上追加してください" : "ルート未設定");
   drawCorridor(); analyze();
 }
 // バッファ帯：ズームに応じて線幅(px)を「2×距離(m)」に合わせる
@@ -571,7 +745,7 @@ function analyze(){
     li.onclick=()=>{ map.setView(r.f.ll, Math.max(map.getZoom(),16)); m.openPopup(); };
     list.appendChild(li);
   });
-  if(res.length && !state.recording) showTab("result");
+  if(res.length && state.autoResult){ state.autoResult=false; showTab("result"); }
 }
 
 /* ========= 出力 ========= */
@@ -629,7 +803,7 @@ recBtn.onclick=()=>{
       window.__confirmNew=true; setTimeout(()=>window.__confirmNew=false,4000); return; }
     window.__confirmNew=false;
     if(!startWatch()) return;
-    state.route=[]; gps.last=null; state.recording=true; routeChanged(false);
+    state.wps=[]; renderWps(); state.route=[]; gps.last=null; state.recording=true; routeChanged(false);
     recBtn.textContent="⏹ 記録停止"; recBtn.classList.add("rec"); fabStop.style.display="block";
     setStatus("routeStatus","記録中…（10m歩くごとに点を追加）");
     try{ navigator.wakeLock && navigator.wakeLock.request("screen").then(l=>gps.lock=l).catch(()=>{}); }catch(e){}
@@ -644,6 +818,264 @@ fabStop.onclick=()=>recBtn.click();
 const _rc = routeChanged;
 routeChanged = function(fit){ _rc(fit); try{ localStorage.setItem("pw_route", JSON.stringify(state.route)); }catch(e){} };
 try{ const saved=JSON.parse(localStorage.getItem("pw_route")||"[]"); if(saved.length>1){ state.route=saved; _rc(true); } }catch(e){}
+try{ const sw=JSON.parse(localStorage.getItem("pw_wps")||"[]"); if(sw.length){ state.wps=sw; renderWps(); } }catch(e){}
+
+/* ========= 共通：ルート上の位置 ========= */
+function cumDist(pts){ const c=[0]; for(let i=1;i<pts.length;i++) c.push(c[i-1]+haversine(pts[i-1],pts[i])); return c; }
+function pointAt(pts, cum, d){ // 始点から d m の位置と、そこまでの頂点インデックス
+  if(d<=0) return {ll:pts[0], i:0};
+  const L=cum[cum.length-1]; if(d>=L) return {ll:pts[pts.length-1], i:pts.length-1};
+  let lo=0, hi=cum.length-1; while(hi-lo>1){ const m=(lo+hi)>>1; if(cum[m]<=d) lo=m; else hi=m; }
+  const t=(d-cum[lo])/((cum[hi]-cum[lo])||1);
+  return {ll:[pts[lo][0]+(pts[hi][0]-pts[lo][0])*t, pts[lo][1]+(pts[hi][1]-pts[lo][1])*t], i:lo};
+}
+
+/* ========= Google：キー不要のリンク ========= */
+function renderGLinks(){
+  const box=document.getElementById("gLinks"); box.innerHTML="";
+  if(state.route.length<2){ box.innerHTML='<span class="hint">ルートを設定すると表示されます</span>'; return; }
+  const cum=cumDist(state.route), L=cum[cum.length-1];
+  const step = L<=2000 ? 500 : L<=6000 ? 1000 : Math.ceil(L/6/500)*500;
+  const marks=[0]; for(let d=step; d<L-step*0.4; d+=step) marks.push(d); marks.push(L);
+  marks.forEach((d,k)=>{
+    const {ll}=pointAt(state.route,cum,d);
+    const label = k===0 ? "スタート付近" : k===marks.length-1 ? "ゴール付近" : `${(d/1000).toFixed(1)}km地点`;
+    const a=document.createElement("a");
+    a.href=`https://www.google.com/maps/search/${encodeURIComponent("観光スポット")}/@${ll[0].toFixed(6)},${ll[1].toFixed(6)},16z`;
+    a.target="_blank"; a.rel="noopener"; a.textContent="🔎 "+label;
+    box.appendChild(a);
+  });
+}
+
+/* ========= Google：Places API (New) で一覧表示 =========
+   規約により Google の結果は Google 以外の地図には描かず、一覧のみ表示する */
+const gKeyEl=document.getElementById("gKey");
+try{ gKeyEl.value=localStorage.getItem("pw_gkey")||""; }catch(e){}
+document.getElementById("gKeySave").onclick=()=>{ try{ localStorage.setItem("pw_gkey", gKeyEl.value.trim()); }catch(e){} gStatus("キーを保存しました"); };
+function gStatus(msg, err){ const el=document.getElementById("gStatus"); el.style.display="block"; el.textContent=msg; el.classList.toggle("err",!!err); }
+let gLoaded=null;
+function loadGoogle(key){
+  if(gLoaded) return gLoaded;
+  gLoaded=new Promise((res,rej)=>{
+    window.__gmReady=()=>res();
+    window.gm_authFailure=()=>rej(new Error("APIキーが無効か、このサイトでの利用が許可されていません"));
+    const s=document.createElement("script");
+    s.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&language=ja&region=JP&loading=async&callback=__gmReady`;
+    s.onerror=()=>rej(new Error("Google Maps を読み込めませんでした"));
+    document.head.appendChild(s);
+  }).catch(e=>{ gLoaded=null; throw e; });
+  return gLoaded;
+}
+document.getElementById("gSearch").onclick=async ()=>{
+  const key=gKeyEl.value.trim();
+  if(!key){ gStatus("APIキーを入力してください",true); return; }
+  if(state.route.length<2){ gStatus("先にルートを設定してください",true); return; }
+  try{ localStorage.setItem("pw_gkey", key); }catch(e){}
+  const btn=document.getElementById("gSearch"); btn.disabled=true;
+  try{
+    gStatus("Google に接続中…");
+    await loadGoogle(key);
+    const { Place, SearchNearbyRankPreference } = await google.maps.importLibrary("places");
+    const cum=cumDist(state.route), L=cum[cum.length-1];
+    const n=Math.min(8, Math.max(2, Math.ceil(L/700)+1));          // 検索回数（最大8回）
+    const spacing=L/(n-1), radius=Math.min(2000, Math.max(state.buffer+100, spacing*0.6));
+    const fields=["id","displayName","location","rating","userRatingCount","googleMapsURI","primaryTypeDisplayName"];
+    let types=["tourist_attraction","museum","art_gallery","park","historical_landmark"];
+    const found=new Map();
+    for(let k=0;k<n;k++){
+      gStatus(`Google で検索中… (${k+1}/${n})`);
+      const {ll}=pointAt(state.route,cum,spacing*k);
+      const req={ fields, locationRestriction:{center:{lat:ll[0],lng:ll[1]}, radius}, includedTypes:types, maxResultCount:20,
+                  rankPreference:SearchNearbyRankPreference.POPULARITY, language:"ja", region:"jp" };
+      let places;
+      try{ ({places}=await Place.searchNearby(req)); }
+      catch(e){ if(types.length>1){ types=["tourist_attraction"]; req.includedTypes=types; ({places}=await Place.searchNearby(req)); } else throw e; }
+      (places||[]).forEach(p=>found.set(p.id,p));
+    }
+    const res=[];
+    found.forEach(p=>{
+      const ll=[p.location.lat(), p.location.lng()];
+      const pr=projectToRoute(ll,state.route,cum);
+      if(pr.d<=Math.max(state.buffer,100)) res.push({p, d:pr.d, along:pr.along});
+    });
+    res.sort((a,b)=>a.along-b.along);
+    const ul=document.getElementById("gList"); ul.innerHTML="";
+    res.forEach((r,i)=>{
+      const p=r.p, li=document.createElement("li");
+      const rate = p.rating ? `<span class="star">★${p.rating.toFixed(1)}</span>（${p.userRatingCount||0}件）・` : "";
+      li.innerHTML=`<div class="num" style="background:#4285f4">${i+1}</div><div><div class="sname">${esc(p.displayName||"")}</div>
+        <div class="smeta">${rate}${esc(p.primaryTypeDisplayName||"")}・${(r.along/1000).toFixed(2)}km地点・ルートから${Math.round(r.d)}m</div></div>`;
+      li.onclick=()=>window.open(p.googleMapsURI,"_blank","noopener");
+      ul.appendChild(li);
+    });
+    document.getElementById("gAttr").style.display = res.length ? "block" : "none";
+    gStatus(res.length ? `${res.length}件見つかりました（${n}回検索）。タップで Google マップを開きます。` : "ルート沿いに見つかりませんでした。距離を広げて試してください。");
+  }catch(e){ gStatus("Google 検索に失敗しました："+(e.message||e), true); }
+  finally{ btn.disabled=false; }
+};
+
+/* ========= 動画：歩くイメージ ========= */
+const V={ canvas:document.getElementById("vCanvas"), bg:null, playing:false, anim:0, blob:null, ext:"", kind:"" };
+const vMsg=t=>document.getElementById("vMsg").textContent=t;
+function mercPx(lat,lng,z){ const s=256*2**z, sin=Math.sin(toRad(lat));
+  return [(lng+180)/360*s, (0.5-Math.log((1+sin)/(1-sin))/(4*Math.PI))*s]; }
+function loadImg(url){ return new Promise(res=>{ const im=new Image(); im.crossOrigin="anonymous"; im.onload=()=>res(im); im.onerror=()=>res(null); im.src=url; }); }
+
+async function vPrepare(){
+  const ratio=document.getElementById("vRatio").value;
+  const [W,H] = ratio==="9:16" ? [720,1280] : ratio==="1:1" ? [1080,1080] : [1280,720];
+  const c=V.canvas; c.width=W; c.height=H;
+  const top = H*(ratio==="16:9"?0.15:0.13), bottom = H*(ratio==="16:9"?0.14:0.12);
+  const box={x:W*0.07, y:top, w:W*0.86, h:H-top-bottom};
+  const pts=state.route;
+  let minLa=90,maxLa=-90,minLn=180,maxLn=-180; pts.forEach(p=>{minLa=Math.min(minLa,p[0]);maxLa=Math.max(maxLa,p[0]);minLn=Math.min(minLn,p[1]);maxLn=Math.max(maxLn,p[1]);});
+  let z=18, a, b;
+  for(; z>3; z--){ a=mercPx(maxLa,minLn,z); b=mercPx(minLa,maxLn,z); if(b[0]-a[0]<=box.w && b[1]-a[1]<=box.h) break; }
+  a=mercPx(maxLa,minLn,z); b=mercPx(minLa,maxLn,z);
+  const scale=Math.min(2, box.w/Math.max(1,b[0]-a[0]), box.h/Math.max(1,b[1]-a[1]));
+  const cpx=[(a[0]+b[0])/2,(a[1]+b[1])/2], cx=box.x+box.w/2, cy=box.y+box.h/2;
+  V.toXY=(lat,lng)=>{ const p=mercPx(lat,lng,z); return [(p[0]-cpx[0])*scale+cx, (p[1]-cpx[1])*scale+cy]; };
+  V.W=W; V.H=H; V.top=top; V.bottom=bottom;
+  // 背景タイル
+  const base=document.getElementById("vBase").value, ext = base==="seamlessphoto" ? "jpg" : "png";
+  const wx0=cpx[0]-cx/scale, wy0=cpx[1]-cy/scale, wx1=cpx[0]+(W-cx)/scale, wy1=cpx[1]+(H-cy)/scale;
+  const tx0=Math.floor(wx0/256), ty0=Math.floor(wy0/256), tx1=Math.floor(wx1/256), ty1=Math.floor(wy1/256);
+  const bg=document.createElement("canvas"); bg.width=W; bg.height=H; const g=bg.getContext("2d");
+  g.fillStyle="#e8e6e0"; g.fillRect(0,0,W,H);
+  vMsg("地図を読み込み中…");
+  const jobs=[];
+  for(let tx=tx0;tx<=tx1;tx++) for(let ty=ty0;ty<=ty1;ty++){
+    const n=2**z; if(ty<0||ty>=n) continue; const x=((tx%n)+n)%n;
+    jobs.push(loadImg(`https://cyberjapandata.gsi.go.jp/xyz/${base}/${z}/${x}/${ty}.${ext}`).then(im=>{ if(im) g.drawImage(im,(tx*256-cpx[0])*scale+cx,(ty*256-cpx[1])*scale+cy,256*scale+0.5,256*scale+0.5); }));
+  }
+  await Promise.all(jobs);
+  try{ g.getImageData(0,0,1,1); }catch(e){ g.fillStyle="#e8e6e0"; g.fillRect(0,0,W,H); } // 汚染時は無地
+  V.bg=bg;
+  V.cum=cumDist(pts); V.L=V.cum[V.cum.length-1];
+  V.xy=pts.map(p=>V.toXY(p[0],p[1]));
+  V.spots = document.getElementById("vSpots").checked ? state.results.slice(0,40).map((r,i)=>({n:i+1, name:r.f.name||CATS[r.f.cat].label, color:CATS[r.f.cat].hex, along:r.along, xy:V.toXY(r.f.ll[0],r.f.ll[1])})) : [];
+  V.title=document.getElementById("vTitle").value.trim();
+  V.dur=+document.getElementById("vDur").value;
+  vMsg("");
+}
+function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+function vFrame(prog, tSec){
+  const c=V.canvas, g=c.getContext("2d"), W=V.W, H=V.H, u=Math.min(W,H)/720;
+  g.drawImage(V.bg,0,0);
+  // 全体ルート（うっすら）
+  g.lineCap="round"; g.lineJoin="round";
+  g.beginPath(); V.xy.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));
+  g.strokeStyle="rgba(255,255,255,.9)"; g.lineWidth=9*u; g.stroke();
+  g.setLineDash([2*u,10*u]); g.strokeStyle="rgba(214,69,43,.75)"; g.lineWidth=4*u; g.stroke(); g.setLineDash([]);
+  // 歩いた軌跡
+  const d=V.L*prog, at=pointAt(state.route,V.cum,d), head=V.toXY(at.ll[0],at.ll[1]);
+  g.beginPath(); for(let i=0;i<=at.i;i++){ const p=V.xy[i]; i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]); } g.lineTo(head[0],head[1]);
+  g.strokeStyle="rgba(255,255,255,.95)"; g.lineWidth=14*u; g.stroke();
+  g.strokeStyle="#d6452b"; g.lineWidth=8*u; g.stroke();
+  // スタート・ゴール
+  const s=V.xy[0], e=V.xy[V.xy.length-1];
+  [[s,"#0b6e4f","S"],[e,"#d6452b","G"]].forEach(([p,col,t])=>{ g.beginPath(); g.arc(p[0],p[1],15*u,0,7); g.fillStyle=col; g.fill(); g.lineWidth=3*u; g.strokeStyle="#fff"; g.stroke();
+    g.fillStyle="#fff"; g.font=`700 ${15*u}px sans-serif`; g.textAlign="center"; g.textBaseline="middle"; g.fillText(t,p[0],p[1]+u); });
+  // 通過したスポット
+  let latest=null;
+  V.spots.forEach(sp=>{ if(sp.along>d) return; latest=sp;
+    const age=Math.min(1,(d-sp.along)/(V.L*0.04+1)); const r=(11+5*(1-age))*u;
+    g.beginPath(); g.arc(sp.xy[0],sp.xy[1],r,0,7); g.fillStyle=sp.color; g.fill(); g.lineWidth=2.5*u; g.strokeStyle="#fff"; g.stroke();
+    g.fillStyle="#fff"; g.font=`700 ${11*u}px sans-serif`; g.textAlign="center"; g.textBaseline="middle"; g.fillText(sp.n,sp.xy[0],sp.xy[1]+u);
+  });
+  // 歩く ◯（脈動）
+  const pulse=(Math.sin(tSec*6)+1)/2;
+  g.beginPath(); g.arc(head[0],head[1],(22+10*pulse)*u,0,7); g.fillStyle=`rgba(29,78,216,${0.18+0.12*(1-pulse)})`; g.fill();
+  g.beginPath(); g.arc(head[0],head[1],12*u,0,7); g.fillStyle="#1d4ed8"; g.fill(); g.lineWidth=4*u; g.strokeStyle="#fff"; g.stroke();
+  // 上部：タイトル
+  const grad=g.createLinearGradient(0,0,0,V.top*1.25); grad.addColorStop(0,"rgba(0,0,0,.65)"); grad.addColorStop(1,"rgba(0,0,0,0)");
+  g.fillStyle=grad; g.fillRect(0,0,W,V.top*1.25);
+  g.fillStyle="#fff"; g.textAlign="left"; g.textBaseline="alphabetic";
+  g.font=`700 ${34*u}px "Hiragino Sans","Noto Sans JP",sans-serif`; g.fillText(V.title||"あるく行路", 28*u, V.top*0.55);
+  const nm=(state.wps.length>1) ? `${state.wps[0].name||"スタート"} → ${state.wps[state.wps.length-1].name||"ゴール"}` : "";
+  g.font=`400 ${18*u}px "Hiragino Sans","Noto Sans JP",sans-serif`; g.fillStyle="rgba(255,255,255,.9)"; if(nm) g.fillText(nm, 28*u, V.top*0.55+30*u);
+  // 下部：距離・時間・最新スポット
+  const by=H-V.bottom;
+  const grad2=g.createLinearGradient(0,by-V.bottom*0.3,0,H); grad2.addColorStop(0,"rgba(0,0,0,0)"); grad2.addColorStop(1,"rgba(0,0,0,.7)");
+  g.fillStyle=grad2; g.fillRect(0,by-V.bottom*0.3,W,V.bottom*1.3);
+  g.fillStyle="#fff"; g.font=`800 ${40*u}px "Hiragino Sans",sans-serif`; g.textAlign="left";
+  g.fillText(`${(d/1000).toFixed(2)} km`, 28*u, H-V.bottom*0.35);
+  g.font=`500 ${20*u}px "Hiragino Sans",sans-serif`; g.textAlign="right";
+  g.fillText(`徒歩 ${Math.round(d/80)} 分 / ${Math.round(V.L/80)} 分`, W-28*u, H-V.bottom*0.35);
+  if(latest){
+    const txt=`📍 ${latest.name}`; g.font=`700 ${20*u}px "Hiragino Sans",sans-serif`;
+    const tw=Math.min(W-56*u, g.measureText(txt).width+28*u), bx=28*u, byy=by-56*u;
+    roundRect(g,bx,byy,tw,40*u,20*u); g.fillStyle="rgba(255,255,255,.95)"; g.fill();
+    g.fillStyle=latest.color; g.textAlign="left"; g.textBaseline="middle"; g.fillText(txt,bx+14*u,byy+20*u,tw-28*u);
+  }
+  g.textBaseline="alphabetic"; g.font=`400 ${11*u}px sans-serif`; g.fillStyle="rgba(255,255,255,.75)"; g.textAlign="right";
+  g.fillText("地図：国土地理院 / 3D都市モデル：PLATEAU（国土交通省）", W-12*u, H-8*u);
+}
+function vAnimate(onEnd){
+  const lead=0.6, tail=1.5, T=V.dur; let t0=null; const id=++V.anim; V.playing=true;
+  const step=ts=>{
+    if(!V.playing || id!==V.anim) return;
+    if(t0===null) t0=ts; const t=(ts-t0)/1000;
+    const prog=Math.max(0,Math.min(1,(t-lead)/T));
+    vFrame(prog,t);
+    if(t<lead+T+tail) requestAnimationFrame(step); else { V.playing=false; onEnd&&onEnd(); }
+  };
+  requestAnimationFrame(step);
+}
+function vStop(){ V.playing=false; V.anim++; }
+function vResetOut(){ V.blob=null; document.getElementById("vSaveRow").hidden=true; const vid=document.getElementById("vVideo"); vid.hidden=true; vid.removeAttribute("src"); V.canvas.hidden=false; }
+
+document.getElementById("vOpen").onclick=async ()=>{
+  if(state.route.length<2){ alertMsg("先に「② ルート」でルートを作ってください"); return; }
+  document.getElementById("vModal").hidden=false; vResetOut();
+  await vPrepare(); vFrame(0,0);
+};
+function alertMsg(t){ setStatus("routeStatus",t,true); showTab("route"); }
+document.getElementById("vClose").onclick=()=>{ vStop(); if(V.rec&&V.rec.state==="recording") V.rec.stop(); document.getElementById("vModal").hidden=true; };
+document.getElementById("vPlay").onclick=()=>{ vResetOut(); vStop(); setTimeout(()=>vAnimate(),30); };
+document.getElementById("vPng").onclick=()=>{
+  vStop(); vResetOut(); vFrame(1,0);
+  V.canvas.toBlob(b=>{ V.blob=b; V.ext="png"; V.kind="image"; document.getElementById("vSaveRow").hidden=false; vMsg("画像ができました"); },"image/png");
+};
+document.getElementById("vRec").onclick=()=>{
+  if(!V.canvas.captureStream || !window.MediaRecorder){ vMsg("この端末のブラウザは動画の書き出しに対応していません"); return; }
+  const types=["video/mp4;codecs=avc1","video/mp4","video/webm;codecs=vp9","video/webm"];
+  const mime=types.find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||"";
+  vStop(); vResetOut();
+  const stream=V.canvas.captureStream(30), chunks=[];
+  let rec; try{ rec=new MediaRecorder(stream, mime?{mimeType:mime, videoBitsPerSecond:6e6}:{}); }catch(e){ vMsg("録画を開始できませんでした"); return; }
+  V.rec=rec;
+  rec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+  rec.onstop=()=>{
+    const type=rec.mimeType||mime||"video/webm";
+    V.blob=new Blob(chunks,{type}); V.ext = /mp4/.test(type) ? "mp4" : "webm"; V.kind="video";
+    const vid=document.getElementById("vVideo"); vid.src=URL.createObjectURL(V.blob); vid.hidden=false; V.canvas.hidden=true;
+    document.getElementById("vSaveRow").hidden=false;
+    vMsg(`動画ができました（${(V.blob.size/1e6).toFixed(1)}MB・${V.ext.toUpperCase()}）`);
+    ["vRec","vPlay","vPng"].forEach(id=>document.getElementById(id).disabled=false);
+  };
+  ["vRec","vPlay","vPng"].forEach(id=>document.getElementById(id).disabled=true);
+  vMsg("録画中…（画面を閉じずにお待ちください）");
+  vFrame(0,0); rec.start(250);
+  vAnimate(()=>setTimeout(()=>rec.state==="recording"&&rec.stop(),200));
+};
+function vFileName(){ const d=new Date(); const p=n=>String(n).padStart(2,"0");
+  return `arukukouro_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.${V.ext}`; }
+document.getElementById("vShare").onclick=async ()=>{
+  if(!V.blob) return;
+  const file=new File([V.blob], vFileName(), {type:V.blob.type});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title:V.title||"あるく行路"}); return; }catch(e){ if(e.name==="AbortError") return; }
+  }
+  dlBlob(V.blob, file.name); vMsg("共有に対応していないため、ダウンロードしました");
+};
+document.getElementById("vDl").onclick=()=>{ if(V.blob) dlBlob(V.blob, vFileName()); };
+function dlBlob(blob,name){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); }
+
+// ルートが変わったら Google リンクを更新
+const _rc2 = routeChanged;
+routeChanged = function(fit){ _rc2(fit); renderGLinks(); };
+renderGLinks();
 
 loadManifest();
 </script>
