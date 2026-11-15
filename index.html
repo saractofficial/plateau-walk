@@ -77,6 +77,7 @@
   ol.wps li button{border:0;background:none;font-size:15px;cursor:pointer;color:var(--sub);padding:4px 6px}
   .chk{display:flex;align-items:center;gap:6px;margin-top:10px}
   .wpin{width:26px;height:26px;border-radius:50%;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4)}
+  .tpin{width:30px;height:30px;border-radius:50%;background:#fff;border:2px solid #2563eb;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 1px 6px rgba(37,99,235,.45)}
   .glinks{display:flex;flex-wrap:wrap;gap:6px}
   .glinks a{font-size:12px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--ink);background:#fff}
   .gbox{margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
@@ -202,7 +203,14 @@
       <ol class="spots" id="spotList"></ol>
       <p class="hint" id="emptyHint">データとルートを設定すると、ルート沿いのスポットがスタート地点からの距離順に並びます。</p>
 
-      <h2>Google のおすすめ観光スポット</h2>
+      <h2>沿線の観光スポット（OpenStreetMap）</h2>
+      <button class="btn primary" id="tBtn" style="width:100%">🔎 ルート沿いの観光スポットを探す</button>
+      <div id="tStatus" class="status" style="display:none"></div>
+      <div class="chips" id="tChips" style="margin-top:8px"></div>
+      <ol class="spots" id="tList"></ol>
+      <p class="hint">名所・史跡・寺社・博物館・展望スポット・公園などを、無料の地図データ OpenStreetMap から探します（APIキー不要）。見つかったスポットは地図と動画にも表示されます。</p>
+
+      <h2>Google マップでも探す</h2>
       <div id="gLinks" class="glinks"></div>
       <p class="hint">↑ ボタンでルート上の各地点の周辺を Google マップで開きます（APIキー不要）。</p>
       <details class="gbox" id="gBox">
@@ -222,7 +230,7 @@
     <!-- ④ 動画 -->
     <section class="pane" id="pane-video">
       <h2>歩くイメージを動画にする</h2>
-      <p class="hint">◯ がルートを歩いて軌跡を描くアニメーションを作ります。途中で PLATEAU の沿線スポットが順に表示されます。</p>
+      <p class="hint">光る ◯ がルートを歩き、青い軌跡を描くアニメーションを作ります。近くを通ると観光スポットが地図上に現れます。</p>
       <label>タイトル</label>
       <input type="text" id="vTitle" value="あるく行路" maxlength="30">
       <div class="row" style="margin-top:10px">
@@ -233,9 +241,10 @@
         <div><label>長さ</label>
           <select id="vDur"><option value="8">8秒</option><option value="12" selected>12秒</option><option value="20">20秒</option><option value="30">30秒</option></select></div>
         <div><label>背景地図</label>
-          <select id="vBase"><option value="pale">淡色地図</option><option value="std">標準地図</option><option value="seamlessphoto">航空写真</option></select></div>
+          <select id="vBase"><option value="night">ナイト（濃紺）</option><option value="pale">淡色地図</option><option value="std">標準地図</option><option value="seamlessphoto">航空写真</option></select></div>
       </div>
-      <label class="chk"><input type="checkbox" id="vSpots" checked> 沿線スポットを表示する</label>
+      <label class="chk"><input type="checkbox" id="vTour" checked> 観光スポットを順に表示する（OpenStreetMap）</label>
+      <label class="chk"><input type="checkbox" id="vSpots"> PLATEAU のスポットも表示する</label>
       <button class="btn primary" id="vOpen" style="width:100%;margin-top:10px">🎬 プレビューを開く</button>
       <p class="hint">プレビュー画面で「動画を作る」を押すと、アニメーションを録画して保存できます。iPhone は共有メニューの「ビデオを保存」で写真アプリに入ります。</p>
     </section>
@@ -556,7 +565,7 @@ document.getElementById("clearBtn").onclick=()=>{ state.wps=[]; state.route=[]; 
 document.getElementById("revBtn").onclick=()=>{ if(state.wps.length){ state.wps.reverse(); wpsChanged(); } else { state.route.reverse(); routeChanged(false);} };
 snapEl.onchange=()=>buildRoute();
 
-function wpColor(i,n){ return i===0 ? "#0b6e4f" : i===n-1 ? "#d6452b" : "#1f2328"; }
+function wpColor(i,n){ return i===0 ? "#0ea5e9" : i===n-1 ? "#1e3a8a" : "#475569"; }
 function wpLabel(i,n){ return i===0 ? "S" : (i===n-1 && n>1) ? "G" : String(i); }
 async function addWp(ll, name){
   const w={ll, name: name||null}; state.wps.push(w);
@@ -678,9 +687,9 @@ document.getElementById("sampleBtn").onclick=()=>{
 function routeChanged(fit){
   routeLayer.clearLayers();
   if(state.route.length){
-    L.polyline(state.route,{color:"#d6452b",weight:5,opacity:.95}).addTo(routeLayer);
+    L.polyline(state.route,{color:"#ffffff",weight:9,opacity:.9}).addTo(routeLayer); L.polyline(state.route,{color:"#2563eb",weight:5,opacity:.95}).addTo(routeLayer);
     L.circleMarker(state.route[0],{radius:7,color:"#fff",weight:2,fillColor:"#0b6e4f",fillOpacity:1}).bindTooltip("スタート").addTo(routeLayer);
-    if(state.route.length>1) L.circleMarker(state.route[state.route.length-1],{radius:7,color:"#fff",weight:2,fillColor:"#d6452b",fillOpacity:1}).bindTooltip("ゴール").addTo(routeLayer);
+    if(state.route.length>1) L.circleMarker(state.route[state.route.length-1],{radius:7,color:"#fff",weight:2,fillColor:"#1e3a8a",fillOpacity:1}).bindTooltip("ゴール").addTo(routeLayer);
     if(fit && state.route.length>1) map.fitBounds(L.latLngBounds(state.route).pad(0.15));
   }
   const len=routeLength(state.route);
@@ -692,7 +701,7 @@ function drawCorridor(){
   corridorLayer.clearLayers();
   if(state.route.length<2) return;
   const lat=map.getCenter().lat, mpp=40075016.686*Math.cos(toRad(lat))/Math.pow(2,map.getZoom()+8);
-  L.polyline(state.route,{color:"#d6452b",weight:Math.max(4,2*state.buffer/mpp),opacity:.12,lineCap:"round",lineJoin:"round",interactive:false}).addTo(corridorLayer);
+  L.polyline(state.route,{color:"#3b82f6",weight:Math.max(4,2*state.buffer/mpp),opacity:.12,lineCap:"round",lineJoin:"round",interactive:false}).addTo(corridorLayer);
 }
 map.on("zoomend", drawCorridor);
 
@@ -914,6 +923,118 @@ document.getElementById("gSearch").onclick=async ()=>{
   finally{ btn.disabled=false; }
 };
 
+/* ========= 沿線の観光スポット（OpenStreetMap / Overpass API） ========= */
+const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+const T_CATS={
+  sight:   {label:"観光名所",       emoji:"⭐", on:true},
+  museum:  {label:"博物館・美術館", emoji:"🏛", on:true},
+  view:    {label:"展望スポット",   emoji:"🌅", on:true},
+  shrine:  {label:"神社",           emoji:"⛩", on:true},
+  temple:  {label:"寺院",           emoji:"🏯", on:true},
+  church:  {label:"教会",           emoji:"⛪", on:true},
+  history: {label:"史跡・記念碑",   emoji:"📜", on:true},
+  park:    {label:"公園・庭園",     emoji:"🌳", on:true},
+  art:     {label:"アート",         emoji:"🎨", on:true},
+  fun:     {label:"レジャー",       emoji:"🎡", on:true},
+};
+const V_MAX=25;                       // 動画に出す最大数
+const tourLayer=L.layerGroup().addTo(map);
+const routeKey=()=>state.route.length+":"+(state.route[0]||[]).join()+":"+(state.route[state.route.length-1]||[]).join()+":"+state.buffer;
+function tStatus(m,err){ const el=document.getElementById("tStatus"); el.style.display="block"; el.textContent=m; el.classList.toggle("err",!!err); }
+function classify(t){
+  if(/^(museum|gallery)$/.test(t.tourism)) return "museum";
+  if(t.tourism==="viewpoint") return "view";
+  if(/^(zoo|aquarium|theme_park)$/.test(t.tourism)) return "fun";
+  if(t.tourism==="artwork") return "art";
+  if(t.amenity==="place_of_worship") return t.religion==="shinto" ? "shrine" : t.religion==="buddhist" ? "temple" : t.religion==="christian" ? "church" : "sight";
+  if(t.historic) return "history";
+  if(/^(park|garden)$/.test(t.leisure)) return "park";
+  return "sight";
+}
+function scoreOf(t){
+  let s=0;
+  if(t.wikidata||t.wikipedia) s+=4;
+  if(t.tourism==="attraction") s+=3;
+  if(/^(museum|gallery|viewpoint|zoo|aquarium|theme_park)$/.test(t.tourism||"")) s+=3;
+  if(t.heritage||t["heritage:operator"]) s+=3;
+  if(t.historic) s+=1;
+  if(t["name:en"]) s+=1;
+  if(t.website||t.url) s+=1;
+  if(t.amenity==="place_of_worship" && !(t.wikidata||t.wikipedia)) s-=1;   // 小さな祠などは控えめに
+  if(t.leisure==="park" && !(t.wikidata||t.wikipedia)) s-=1;
+  return s;
+}
+// ルートを間引いて Overpass の around（線）に渡す
+function routeForQuery(){
+  const pts=state.route, cum=cumDist(pts), L=cum[cum.length-1];
+  const step=Math.max(60, L/120), out=[]; let next=0;
+  pts.forEach((p,i)=>{ if(cum[i]>=next || i===pts.length-1){ out.push(p); next=cum[i]+step; } });
+  return out;
+}
+async function searchTourism(silent){
+  if(state.route.length<2){ if(!silent) tStatus("先に「② ルート」でルートを作ってください",true); return; }
+  const R=Math.max(80, state.buffer), line=routeForQuery().map(p=>`${p[0].toFixed(5)},${p[1].toFixed(5)}`).join(",");
+  const A=`(around:${R},${line})`;
+  const q=`[out:json][timeout:25];(
+nwr${A}[tourism~"^(attraction|museum|gallery|viewpoint|artwork|zoo|aquarium|theme_park)$"][name];
+nwr${A}[historic][name];
+nwr${A}[amenity=place_of_worship][name];
+nwr${A}[leisure~"^(park|garden)$"][name];
+);out center tags;`;
+  if(!silent) tStatus("OpenStreetMap で検索中…（10秒ほどかかることがあります）");
+  let j=null, err=null;
+  for(const ep of OVERPASS){
+    try{ const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});
+      if(!r.ok) throw new Error("HTTP "+r.status); j=await r.json(); break; }catch(e){ err=e; }
+  }
+  if(!j){ if(!silent) tStatus("検索に失敗しました（混雑している可能性があります。少し待って再度お試しください）："+(err&&err.message),true); throw err||new Error("failed"); }
+  const cum=cumDist(state.route), seen=new Map();
+  for(const el of j.elements||[]){
+    const t=el.tags||{}, name=t["name:ja"]||t.name; if(!name) continue;
+    const lat= el.lat ?? (el.center&&el.center.lat), lon= el.lon ?? (el.center&&el.center.lon); if(lat==null) continue;
+    const ll=[lat,lon], pr=projectToRoute(ll,state.route,cum); if(pr.d>R) continue;
+    const item={name, ll, cat:classify(t), score:scoreOf(t), d:pr.d, along:pr.along, wiki:t.wikipedia||"", osm:`https://www.openstreetmap.org/${el.type}/${el.id}`};
+    const k=name.replace(/\s/g,""), old=seen.get(k);       // 同名は1つに
+    if(!old || item.score>old.score) seen.set(k,item);
+  }
+  // おすすめ度の高い順に最大60件 → ルート順に並べる
+  let list=[...seen.values()].sort((a,b)=>b.score-a.score || a.d-b.d).slice(0,60);
+  list.sort((a,b)=>a.along-b.along);
+  state.tour=list; state.tourKey=routeKey();
+  renderTour();
+  if(!silent) tStatus(list.length ? `${list.length}件見つかりました（おすすめ度の高い順に選び、ルート順に表示）` : "ルート沿いに見つかりませんでした。「② ルート」で距離を広げてみてください");
+}
+function renderTourChips(){
+  const box=document.getElementById("tChips"); box.innerHTML="";
+  const n={}; (state.tour||[]).forEach(t=>n[t.cat]=(n[t.cat]||0)+1);
+  Object.entries(T_CATS).forEach(([k,c])=>{ if(!n[k]) return;
+    const el=document.createElement("label"); el.className="chip";
+    el.innerHTML=`<input type="checkbox" ${c.on?"checked":""}>${c.emoji} ${c.label}(${n[k]})`;
+    el.querySelector("input").onchange=e=>{ T_CATS[k].on=e.target.checked; renderTour(); };
+    box.appendChild(el); });
+}
+function renderTour(){
+  tourLayer.clearLayers(); renderTourChips();
+  const ul=document.getElementById("tList"); ul.innerHTML="";
+  (state.tour||[]).filter(t=>T_CATS[t.cat].on).forEach((t,i)=>{
+    const c=T_CATS[t.cat];
+    const m=L.marker(t.ll,{icon:L.divIcon({className:"",html:`<div class="tpin">${c.emoji}</div>`,iconSize:[30,30],iconAnchor:[15,15]})})
+      .bindPopup(`<b>${esc(t.name)}</b><br>${c.emoji} ${c.label}<br>スタートから ${(t.along/1000).toFixed(2)}km／ルートから ${Math.round(t.d)}m`+
+        (t.wiki?`<br><a href="https://ja.wikipedia.org/wiki/${encodeURIComponent(t.wiki.replace(/^ja:/,""))}" target="_blank" rel="noopener">Wikipedia</a> ・ `:"<br>")+
+        `<a href="${t.osm}" target="_blank" rel="noopener">OSM</a> ・ <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.name)}" target="_blank" rel="noopener">Googleマップ</a>`).addTo(tourLayer);
+    const li=document.createElement("li");
+    li.innerHTML=`<div class="num" style="background:#2563eb;font-size:14px">${c.emoji}</div><div><div class="sname">${esc(t.name)}${t.score>=4?' <span class="star">★</span>':''}</div>
+      <div class="smeta">${c.label}・${(t.along/1000).toFixed(2)}km地点・ルートから${Math.round(t.d)}m</div></div>`;
+    li.onclick=()=>{ map.setView(t.ll, Math.max(map.getZoom(),16)); m.openPopup(); };
+    ul.appendChild(li);
+  });
+}
+document.getElementById("tBtn").onclick=async ()=>{ const b=document.getElementById("tBtn"); b.disabled=true; try{ await searchTourism(false); }catch(e){} finally{ b.disabled=false; } };
+// ルートが変わったら古い結果を消す
+const _rc3 = routeChanged;
+routeChanged = function(fit){ _rc3(fit); if(state.tour && state.tourKey!==routeKey()){ state.tour=null; tourLayer.clearLayers(); document.getElementById("tList").innerHTML=""; document.getElementById("tChips").innerHTML=""; } };
+
+
 /* ========= 動画：歩くイメージ ========= */
 const V={ canvas:document.getElementById("vCanvas"), bg:null, playing:false, anim:0, blob:null, ext:"", kind:"" };
 const vMsg=t=>document.getElementById("vMsg").textContent=t;
@@ -937,7 +1058,8 @@ async function vPrepare(){
   V.toXY=(lat,lng)=>{ const p=mercPx(lat,lng,z); return [(p[0]-cpx[0])*scale+cx, (p[1]-cpx[1])*scale+cy]; };
   V.W=W; V.H=H; V.top=top; V.bottom=bottom;
   // 背景タイル
-  const base=document.getElementById("vBase").value, ext = base==="seamlessphoto" ? "jpg" : "png";
+  const sel=document.getElementById("vBase").value, night= sel==="night", base= night ? "pale" : sel, ext = base==="seamlessphoto" ? "jpg" : "png";
+  V.night = night || sel==="seamlessphoto";
   const wx0=cpx[0]-cx/scale, wy0=cpx[1]-cy/scale, wx1=cpx[0]+(W-cx)/scale, wy1=cpx[1]+(H-cy)/scale;
   const tx0=Math.floor(wx0/256), ty0=Math.floor(wy0/256), tx1=Math.floor(wx1/256), ty1=Math.floor(wy1/256);
   const bg=document.createElement("canvas"); bg.width=W; bg.height=H; const g=bg.getContext("2d");
@@ -950,66 +1072,130 @@ async function vPrepare(){
   }
   await Promise.all(jobs);
   try{ g.getImageData(0,0,1,1); }catch(e){ g.fillStyle="#e8e6e0"; g.fillRect(0,0,W,H); } // 汚染時は無地
+  if(night){ // 淡色地図を反転して濃紺に
+    g.globalCompositeOperation="difference"; g.fillStyle="#fff"; g.fillRect(0,0,W,H);
+    g.globalCompositeOperation="multiply"; g.fillStyle="#4a6fa8"; g.fillRect(0,0,W,H);
+    g.globalCompositeOperation="source-over"; g.fillStyle="rgba(8,20,48,.25)"; g.fillRect(0,0,W,H);
+  } else if(sel==="seamlessphoto"){ g.fillStyle="rgba(8,20,48,.35)"; g.fillRect(0,0,W,H); }
+  else { g.fillStyle="rgba(239,246,255,.35)"; g.fillRect(0,0,W,H); }
+  const vg=g.createRadialGradient(W/2,H/2,Math.min(W,H)*0.35,W/2,H/2,Math.max(W,H)*0.75);
+  vg.addColorStop(0,"rgba(2,6,23,0)"); vg.addColorStop(1, night ? "rgba(2,6,23,.55)" : "rgba(2,6,23,.25)"); g.fillStyle=vg; g.fillRect(0,0,W,H);
   V.bg=bg;
   V.cum=cumDist(pts); V.L=V.cum[V.cum.length-1];
   V.xy=pts.map(p=>V.toXY(p[0],p[1]));
-  V.spots = document.getElementById("vSpots").checked ? state.results.slice(0,40).map((r,i)=>({n:i+1, name:r.f.name||CATS[r.f.cat].label, color:CATS[r.f.cat].hex, along:r.along, xy:V.toXY(r.f.ll[0],r.f.ll[1])})) : [];
+  let sp=[];
+  if(document.getElementById("vTour").checked){
+    if(!state.tour || state.tourKey!==routeKey()){ vMsg("観光スポットを検索中…"); try{ await searchTourism(true); }catch(e){} }
+    sp = sp.concat((state.tour||[]).filter(t=>T_CATS[t.cat].on).slice(0,V_MAX).map(t=>({name:t.name, emoji:T_CATS[t.cat].emoji, kind:T_CATS[t.cat].label, along:t.along, ll:t.ll})));
+  }
+  if(document.getElementById("vSpots").checked)
+    sp = sp.concat(state.results.slice(0,20).map(r=>({name:r.f.name||CATS[r.f.cat].label, emoji:{landmark:"🏙",park:"🌳",station:"🚉",shelter:"🏫",other:"📍"}[r.f.cat], kind:"PLATEAU・"+CATS[r.f.cat].label, along:r.along, ll:r.f.ll})));
+  V.spots = sp.sort((a,b)=>a.along-b.along).map(x=>Object.assign(x,{xy:V.toXY(x.ll[0],x.ll[1])}));
   V.title=document.getElementById("vTitle").value.trim();
   V.dur=+document.getElementById("vDur").value;
   vMsg("");
 }
 function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
 function vFrame(prog, tSec){
-  const c=V.canvas, g=c.getContext("2d"), W=V.W, H=V.H, u=Math.min(W,H)/720;
-  g.drawImage(V.bg,0,0);
-  // 全体ルート（うっすら）
+  const c=V.canvas, g=c.getContext("2d"), W=V.W, H=V.H, u=Math.min(W,H)/720, night=V.night;
+  const FONT='"Hiragino Sans","Noto Sans JP",sans-serif';
+  g.save(); g.drawImage(V.bg,0,0);
   g.lineCap="round"; g.lineJoin="round";
+  // これから歩く道（細い点線）
   g.beginPath(); V.xy.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));
-  g.strokeStyle="rgba(255,255,255,.9)"; g.lineWidth=9*u; g.stroke();
-  g.setLineDash([2*u,10*u]); g.strokeStyle="rgba(214,69,43,.75)"; g.lineWidth=4*u; g.stroke(); g.setLineDash([]);
-  // 歩いた軌跡
+  g.setLineDash([1*u,9*u]); g.strokeStyle= night ? "rgba(186,230,253,.55)" : "rgba(30,64,175,.55)"; g.lineWidth=4*u; g.stroke(); g.setLineDash([]);
+  // 歩いた軌跡：発光 → グラデーション → 白い芯
   const d=V.L*prog, at=pointAt(state.route,V.cum,d), head=V.toXY(at.ll[0],at.ll[1]);
-  g.beginPath(); for(let i=0;i<=at.i;i++){ const p=V.xy[i]; i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]); } g.lineTo(head[0],head[1]);
-  g.strokeStyle="rgba(255,255,255,.95)"; g.lineWidth=14*u; g.stroke();
-  g.strokeStyle="#d6452b"; g.lineWidth=8*u; g.stroke();
-  // スタート・ゴール
-  const s=V.xy[0], e=V.xy[V.xy.length-1];
-  [[s,"#0b6e4f","S"],[e,"#d6452b","G"]].forEach(([p,col,t])=>{ g.beginPath(); g.arc(p[0],p[1],15*u,0,7); g.fillStyle=col; g.fill(); g.lineWidth=3*u; g.strokeStyle="#fff"; g.stroke();
-    g.fillStyle="#fff"; g.font=`700 ${15*u}px sans-serif`; g.textAlign="center"; g.textBaseline="middle"; g.fillText(t,p[0],p[1]+u); });
-  // 通過したスポット
-  let latest=null;
-  V.spots.forEach(sp=>{ if(sp.along>d) return; latest=sp;
-    const age=Math.min(1,(d-sp.along)/(V.L*0.04+1)); const r=(11+5*(1-age))*u;
-    g.beginPath(); g.arc(sp.xy[0],sp.xy[1],r,0,7); g.fillStyle=sp.color; g.fill(); g.lineWidth=2.5*u; g.strokeStyle="#fff"; g.stroke();
-    g.fillStyle="#fff"; g.font=`700 ${11*u}px sans-serif`; g.textAlign="center"; g.textBaseline="middle"; g.fillText(sp.n,sp.xy[0],sp.xy[1]+u);
-  });
-  // 歩く ◯（脈動）
-  const pulse=(Math.sin(tSec*6)+1)/2;
-  g.beginPath(); g.arc(head[0],head[1],(22+10*pulse)*u,0,7); g.fillStyle=`rgba(29,78,216,${0.18+0.12*(1-pulse)})`; g.fill();
-  g.beginPath(); g.arc(head[0],head[1],12*u,0,7); g.fillStyle="#1d4ed8"; g.fill(); g.lineWidth=4*u; g.strokeStyle="#fff"; g.stroke();
-  // 上部：タイトル
-  const grad=g.createLinearGradient(0,0,0,V.top*1.25); grad.addColorStop(0,"rgba(0,0,0,.65)"); grad.addColorStop(1,"rgba(0,0,0,0)");
-  g.fillStyle=grad; g.fillRect(0,0,W,V.top*1.25);
-  g.fillStyle="#fff"; g.textAlign="left"; g.textBaseline="alphabetic";
-  g.font=`700 ${34*u}px "Hiragino Sans","Noto Sans JP",sans-serif`; g.fillText(V.title||"あるく行路", 28*u, V.top*0.55);
-  const nm=(state.wps.length>1) ? `${state.wps[0].name||"スタート"} → ${state.wps[state.wps.length-1].name||"ゴール"}` : "";
-  g.font=`400 ${18*u}px "Hiragino Sans","Noto Sans JP",sans-serif`; g.fillStyle="rgba(255,255,255,.9)"; if(nm) g.fillText(nm, 28*u, V.top*0.55+30*u);
-  // 下部：距離・時間・最新スポット
-  const by=H-V.bottom;
-  const grad2=g.createLinearGradient(0,by-V.bottom*0.3,0,H); grad2.addColorStop(0,"rgba(0,0,0,0)"); grad2.addColorStop(1,"rgba(0,0,0,.7)");
-  g.fillStyle=grad2; g.fillRect(0,by-V.bottom*0.3,W,V.bottom*1.3);
-  g.fillStyle="#fff"; g.font=`800 ${40*u}px "Hiragino Sans",sans-serif`; g.textAlign="left";
-  g.fillText(`${(d/1000).toFixed(2)} km`, 28*u, H-V.bottom*0.35);
-  g.font=`500 ${20*u}px "Hiragino Sans",sans-serif`; g.textAlign="right";
-  g.fillText(`徒歩 ${Math.round(d/80)} 分 / ${Math.round(V.L/80)} 分`, W-28*u, H-V.bottom*0.35);
-  if(latest){
-    const txt=`📍 ${latest.name}`; g.font=`700 ${20*u}px "Hiragino Sans",sans-serif`;
-    const tw=Math.min(W-56*u, g.measureText(txt).width+28*u), bx=28*u, byy=by-56*u;
-    roundRect(g,bx,byy,tw,40*u,20*u); g.fillStyle="rgba(255,255,255,.95)"; g.fill();
-    g.fillStyle=latest.color; g.textAlign="left"; g.textBaseline="middle"; g.fillText(txt,bx+14*u,byy+20*u,tw-28*u);
+  const trail=V.xy.slice(0,at.i+1).concat([head]);
+  const path=()=>{ g.beginPath(); trail.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1])); };
+  if(trail.length>1){
+    path(); g.shadowColor= night ? "rgba(56,189,248,.95)" : "rgba(37,99,235,.6)"; g.shadowBlur=24*u;
+    g.strokeStyle= night ? "rgba(56,189,248,.45)" : "rgba(59,130,246,.35)"; g.lineWidth=18*u; g.stroke(); g.shadowBlur=0;
+    // 区間ごとに色を変えてグラデーション（水色 → 青 → 藍）
+    const cols=[[103,232,249],[56,189,248],[37,99,235],[79,70,229]];
+    const mix=t=>{ t=Math.max(0,Math.min(1,t))*(cols.length-1); const i=Math.min(cols.length-2,Math.floor(t)), f=t-i, a=cols[i], b=cols[i+1];
+      return `rgb(${a.map((v,k)=>Math.round(v+(b[k]-v)*f)).join(",")})`; };
+    g.lineWidth=9*u;
+    for(let i=1;i<trail.length;i++){
+      const dd = i<=at.i ? V.cum[i] : d;
+      g.beginPath(); g.moveTo(trail[i-1][0],trail[i-1][1]); g.lineTo(trail[i][0],trail[i][1]);
+      g.strokeStyle=mix(dd/V.L); g.stroke();
+    }
+    path(); g.strokeStyle="rgba(255,255,255,.75)"; g.lineWidth=2.2*u; g.stroke();
   }
-  g.textBaseline="alphabetic"; g.font=`400 ${11*u}px sans-serif`; g.fillStyle="rgba(255,255,255,.75)"; g.textAlign="right";
-  g.fillText("地図：国土地理院 / 3D都市モデル：PLATEAU（国土交通省）", W-12*u, H-8*u);
+  // スタート・ゴール
+  const s0=V.xy[0], e0=V.xy[V.xy.length-1];
+  const ring=(p,col,label)=>{ g.beginPath(); g.arc(p[0],p[1],13*u,0,7); g.fillStyle=col; g.fill(); g.lineWidth=3*u; g.strokeStyle="#fff"; g.stroke();
+    g.fillStyle="#fff"; g.font=`800 ${12*u}px ${FONT}`; g.textAlign="center"; g.textBaseline="middle"; g.fillText(label,p[0],p[1]+u); };
+  ring(s0,"#0ea5e9","S"); ring(e0, prog>=1 ? "#4f46e5" : "rgba(30,58,138,.85)","G");
+  // 観光スポット：通過したら地図上にポップ
+  let latest=null, shown=0;
+  V.spots.forEach(sp=>{
+    if(sp.along>d) return; shown++; latest=sp;
+    const age=Math.min(1,(d-sp.along)/(V.L*0.035+1));
+    const pop = age<0.6 ? 1+0.35*Math.sin(age/0.6*Math.PI) : 1;      // ぽんっと出る
+    const r=15*u*Math.min(1,age*4)*pop;
+    if(r<1) return;
+    g.beginPath(); g.moveTo(sp.xy[0],sp.xy[1]); g.lineTo(sp.xy[0],sp.xy[1]-r*1.3);
+    g.strokeStyle="rgba(255,255,255,.9)"; g.lineWidth=2*u; g.stroke();
+    const cy=sp.xy[1]-r*1.3-r;
+    g.shadowColor="rgba(14,165,233,.8)"; g.shadowBlur=12*u;
+    g.beginPath(); g.arc(sp.xy[0],cy,r,0,7); g.fillStyle="#fff"; g.fill(); g.shadowBlur=0;
+    g.lineWidth=2.5*u; g.strokeStyle="#2563eb"; g.stroke();
+    g.font=`${r*1.05}px "Apple Color Emoji","Segoe UI Emoji",sans-serif`; g.textAlign="center"; g.textBaseline="middle"; g.fillStyle="#1e3a8a";
+    g.fillText(sp.emoji||"★", sp.xy[0], cy+u);
+    // 直近のスポットは名前ラベル
+    if(sp===V.spots.filter(x=>x.along<=d).slice(-2)[0] || sp===V.spots.filter(x=>x.along<=d).slice(-1)[0]){
+      g.font=`700 ${15*u}px ${FONT}`; const tw=g.measureText(sp.name).width+18*u;
+      const lx=Math.min(W-tw-8*u, Math.max(8*u, sp.xy[0]-tw/2)), ly=cy-r-30*u;
+      roundRect(g,lx,ly,tw,24*u,12*u); g.fillStyle= night ? "rgba(15,23,42,.82)" : "rgba(255,255,255,.92)"; g.fill();
+      g.fillStyle= night ? "#e0f2fe" : "#1e3a8a"; g.textAlign="left"; g.fillText(sp.name, lx+9*u, ly+12.5*u);
+    }
+  });
+  // 歩く ◯（彗星）
+  const ph=(tSec*0.9)%1;
+  g.beginPath(); g.arc(head[0],head[1],(14+34*ph)*u,0,7); g.strokeStyle=`rgba(125,211,252,${0.7*(1-ph)})`; g.lineWidth=2.5*u; g.stroke();
+  const rg=g.createRadialGradient(head[0],head[1],0,head[0],head[1],30*u);
+  rg.addColorStop(0,"rgba(186,230,253,.95)"); rg.addColorStop(0.35,"rgba(56,189,248,.55)"); rg.addColorStop(1,"rgba(56,189,248,0)");
+  g.beginPath(); g.arc(head[0],head[1],30*u,0,7); g.fillStyle=rg; g.fill();
+  g.beginPath(); g.arc(head[0],head[1],9*u,0,7); g.fillStyle="#fff"; g.fill();
+  g.beginPath(); g.arc(head[0],head[1],5*u,0,7); g.fillStyle="#2563eb"; g.fill();
+  // 上部：タイトル
+  const gr=g.createLinearGradient(0,0,0,V.top*1.35); gr.addColorStop(0,"rgba(2,6,23,.78)"); gr.addColorStop(1,"rgba(2,6,23,0)");
+  g.fillStyle=gr; g.fillRect(0,0,W,V.top*1.35);
+  g.textAlign="left"; g.textBaseline="alphabetic";
+  g.fillStyle="#7dd3fc"; g.font=`700 ${13*u}px ${FONT}`; g.fillText("WALK ROUTE", 30*u, V.top*0.33);
+  g.fillStyle="#fff"; g.font=`800 ${34*u}px ${FONT}`; g.fillText(V.title||"あるく行路", 30*u, V.top*0.33+40*u);
+  const nm=(state.wps.length>1) ? `${state.wps[0].name||"スタート"}  →  ${state.wps[state.wps.length-1].name||"ゴール"}` : "";
+  if(nm){ g.font=`500 ${17*u}px ${FONT}`; g.fillStyle="rgba(224,242,254,.9)"; g.fillText(nm, 30*u, V.top*0.33+68*u); }
+  // 下部：進捗バー・距離・最新スポット
+  const gr2=g.createLinearGradient(0,H-V.bottom*1.9,0,H); gr2.addColorStop(0,"rgba(2,6,23,0)"); gr2.addColorStop(1,"rgba(2,6,23,.85)");
+  g.fillStyle=gr2; g.fillRect(0,H-V.bottom*1.9,W,V.bottom*1.9);
+  const barY=H-V.bottom*0.78, bx=30*u, bw=W-60*u;
+  roundRect(g,bx,barY,bw,6*u,3*u); g.fillStyle="rgba(255,255,255,.18)"; g.fill();
+  const bgrad=g.createLinearGradient(bx,0,bx+bw,0); bgrad.addColorStop(0,"#67e8f9"); bgrad.addColorStop(0.5,"#3b82f6"); bgrad.addColorStop(1,"#6366f1");
+  if(prog>0){ roundRect(g,bx,barY,Math.max(6*u,bw*prog),6*u,3*u); g.fillStyle=bgrad; g.fill(); }
+  V.spots.forEach(sp=>{ const x=bx+bw*(sp.along/V.L); g.beginPath(); g.arc(x,barY+3*u,3.5*u,0,7); g.fillStyle= sp.along<=d ? "#fff" : "rgba(255,255,255,.35)"; g.fill(); });
+  g.fillStyle="#fff"; g.textAlign="left"; g.font=`800 ${38*u}px ${FONT}`;
+  g.fillText((d/1000).toFixed(2), bx, barY-16*u);
+  const kw=g.measureText((d/1000).toFixed(2)).width; g.font=`600 ${18*u}px ${FONT}`; g.fillStyle="#7dd3fc"; g.fillText(" km", bx+kw, barY-16*u);
+  g.textAlign="right"; g.fillStyle="rgba(224,242,254,.9)"; g.font=`500 ${17*u}px ${FONT}`;
+  g.fillText(`徒歩 ${Math.round(d/80)}分 / ${Math.round(V.L/80)}分` + (V.spots.length?`　スポット ${shown}/${V.spots.length}`:""), bx+bw, barY-18*u);
+  if(latest){
+    const age=Math.min(1,(d-latest.along)/(V.L*0.03+1));
+    const txt=`${latest.emoji||"📍"}  ${latest.name}`, sub=latest.kind||"";
+    g.font=`700 ${19*u}px ${FONT}`; const tw=Math.min(W-60*u, Math.max(g.measureText(txt).width, 120*u)+36*u);
+    const cyy=barY-110*u + (1-Math.min(1,age*3))*14*u;
+    g.globalAlpha=Math.min(1,age*3);
+    roundRect(g,bx,cyy,tw,52*u,14*u); g.fillStyle="rgba(255,255,255,.96)"; g.fill();
+    roundRect(g,bx,cyy,6*u,52*u,3*u); g.fillStyle="#2563eb"; g.fill();
+    g.textAlign="left"; g.textBaseline="middle"; g.fillStyle="#0f172a"; g.fillText(txt,bx+18*u,cyy+19*u,tw-30*u);
+    g.font=`500 ${12*u}px ${FONT}`; g.fillStyle="#2563eb"; g.fillText(sub,bx+18*u,cyy+39*u,tw-30*u);
+    g.globalAlpha=1;
+  }
+  g.textBaseline="alphabetic"; g.font=`400 ${10.5*u}px sans-serif`; g.fillStyle="rgba(255,255,255,.6)"; g.textAlign="right";
+  g.fillText("地図：国土地理院 / スポット：© OpenStreetMap contributors / PLATEAU（国土交通省）", W-12*u, H-8*u);
+  g.restore();
 }
 function vAnimate(onEnd){
   const lead=0.6, tail=1.5, T=V.dur; let t0=null; const id=++V.anim; V.playing=true;
