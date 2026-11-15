@@ -924,7 +924,7 @@ document.getElementById("gSearch").onclick=async ()=>{
 };
 
 /* ========= 沿線の観光スポット（OpenStreetMap / Overpass API） ========= */
-const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.private.coffee/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
 const T_CATS={
   sight:   {label:"観光名所",       emoji:"⭐", on:true},
   museum:  {label:"博物館・美術館", emoji:"🏛", on:true},
@@ -973,36 +973,47 @@ function routeForQuery(){
 }
 async function searchTourism(silent){
   if(state.route.length<2){ if(!silent) tStatus("先に「② ルート」でルートを作ってください",true); return; }
-  const R=Math.max(80, state.buffer), line=routeForQuery().map(p=>`${p[0].toFixed(5)},${p[1].toFixed(5)}`).join(",");
-  const A=`(around:${R},${line})`;
-  const q=`[out:json][timeout:25];(
-nwr${A}[tourism~"^(attraction|museum|gallery|viewpoint|artwork|zoo|aquarium|theme_park)$"][name];
-nwr${A}[historic][name];
-nwr${A}[amenity=place_of_worship][name];
-nwr${A}[leisure~"^(park|garden)$"][name];
+  const R=Math.max(80, state.buffer);
+  // ルートを囲む四角形（＋距離分の余白）で検索し、ルートからの距離は端末側で判定する（軽くて速い）
+  let s=90,n=-90,w=180,e=-180; state.route.forEach(p=>{ s=Math.min(s,p[0]); n=Math.max(n,p[0]); w=Math.min(w,p[1]); e=Math.max(e,p[1]); });
+  const dLat=R/111000*1.1, dLng=dLat/Math.cos(toRad((s+n)/2));
+  const bb=`(${(s-dLat).toFixed(5)},${(w-dLng).toFixed(5)},${(n+dLat).toFixed(5)},${(e+dLng).toFixed(5)})`;
+  const q=`[out:json][timeout:40][maxsize:67108864];(
+nwr["tourism"~"^(attraction|museum|gallery|viewpoint|artwork|zoo|aquarium|theme_park)$"]["name"]${bb};
+nwr["historic"]["name"]${bb};
+nwr["amenity"="place_of_worship"]["name"]${bb};
+nwr["leisure"~"^(park|garden)$"]["name"]${bb};
 );out center tags;`;
-  if(!silent) tStatus("OpenStreetMap で検索中…（10秒ほどかかることがあります）");
-  let j=null, err=null;
+  if(!silent) tStatus("OpenStreetMap で検索中…（10〜20秒かかることがあります）");
+  let j=null, errs=[];
   for(const ep of OVERPASS){
-    try{ const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});
-      if(!r.ok) throw new Error("HTTP "+r.status); j=await r.json(); break; }catch(e){ err=e; }
+    try{
+      const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});
+      if(!r.ok) throw new Error(r.status===429||r.status===504 ? "混雑中" : "HTTP "+r.status);
+      const jj=await r.json();
+      if(jj.remark && !(jj.elements&&jj.elements.length)) throw new Error("処理が打ち切られました");
+      j=jj; break;
+    }catch(e){ errs.push(e.message); }
   }
-  if(!j){ if(!silent) tStatus("検索に失敗しました（混雑している可能性があります。少し待って再度お試しください）："+(err&&err.message),true); throw err||new Error("failed"); }
+  if(!j){ if(!silent) tStatus("検索サービスに接続できませんでした（"+errs.join("／")+"）。1〜2分おいて、もう一度お試しください。",true); throw new Error("failed"); }
+  const total=(j.elements||[]).length;
   const cum=cumDist(state.route), seen=new Map();
   for(const el of j.elements||[]){
     const t=el.tags||{}, name=t["name:ja"]||t.name; if(!name) continue;
     const lat= el.lat ?? (el.center&&el.center.lat), lon= el.lon ?? (el.center&&el.center.lon); if(lat==null) continue;
     const ll=[lat,lon], pr=projectToRoute(ll,state.route,cum); if(pr.d>R) continue;
     const item={name, ll, cat:classify(t), score:scoreOf(t), d:pr.d, along:pr.along, wiki:t.wikipedia||"", osm:`https://www.openstreetmap.org/${el.type}/${el.id}`};
-    const k=name.replace(/\s/g,""), old=seen.get(k);       // 同名は1つに
+    const k=name.replace(/\s/g,""), old=seen.get(k);
     if(!old || item.score>old.score) seen.set(k,item);
   }
-  // おすすめ度の高い順に最大60件 → ルート順に並べる
   let list=[...seen.values()].sort((a,b)=>b.score-a.score || a.d-b.d).slice(0,60);
   list.sort((a,b)=>a.along-b.along);
   state.tour=list; state.tourKey=routeKey();
   renderTour();
-  if(!silent) tStatus(list.length ? `${list.length}件見つかりました（おすすめ度の高い順に選び、ルート順に表示）` : "ルート沿いに見つかりませんでした。「② ルート」で距離を広げてみてください");
+  if(!silent) tStatus(list.length
+    ? `${list.length}件見つかりました（周辺 ${total}件からルート沿い ${R}m 以内を選び、ルート順に表示）`
+    : total ? `周辺に ${total}件ありましたが、ルートから ${R}m 以内にはありませんでした。「② ルート」で距離を広げてみてください。`
+            : "この範囲には登録されたスポットがありませんでした。");
 }
 function renderTourChips(){
   const box=document.getElementById("tChips"); box.innerHTML="";
