@@ -1,0 +1,55 @@
+# PLATEAU データを取得して GitHub Pages に公開する
+# ・main に push したとき／毎月1日／手動（Actions タブの Run workflow）で実行
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 18 1 * *"   # 毎月2日 3:00 JST にデータ更新
+  workflow_dispatch:
+    inputs:
+      codes:
+        description: "市区町村コード（スペース区切り）"
+        default: "13100"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: PLATEAU データ取得
+        run: |
+          CODES="${{ github.event.inputs.codes }}"
+          [ -z "$CODES" ] && CODES="13100"
+          python3 run.py $CODES --build-only
+      - name: 公開用フォルダ作成
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp -r data _site/ 2>/dev/null || true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
