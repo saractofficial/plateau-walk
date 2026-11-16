@@ -65,9 +65,9 @@
   .sheet.dragging{transition:none}
   .grab{flex:0 0 auto;padding:8px 16px 10px;cursor:grab;touch-action:none;user-select:none}
   .grab>i{display:block;width:40px;height:5px;border-radius:3px;background:#cbd5e1;margin:0 auto 10px}
-  .sumrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-  .stat{background:var(--bg);border-radius:14px;padding:9px 12px}
-  .stat b{display:block;font-size:19px;font-weight:800;letter-spacing:-.01em}
+  .sumrow{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .stat{background:var(--bg);border-radius:14px;padding:9px 10px;min-width:0}
+  .stat b{display:block;font-size:17px;font-weight:800;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .stat span{font-size:11px;color:var(--sub)}
   .sheet-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 16px calc(24px + env(safe-area-inset-bottom));overscroll-behavior:contain}
 
@@ -128,6 +128,8 @@
   ol.wps li span.wname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   ol.wps li button{border:0;background:var(--bg);width:30px;height:30px;border-radius:9px;font-size:12px;cursor:pointer;color:var(--sub)}
   .wpin{width:28px;height:28px;border-radius:50%;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .tpin.cafe{border-color:#92400e;box-shadow:0 2px 8px rgba(146,64,14,.45)}
+  .thumb.noimg.cafe{background:#fef3c7}
   .tpin{width:32px;height:32px;border-radius:50%;background:#fff;border:2px solid #2563eb;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(37,99,235,.45)}
   .pg{display:flex;align-items:center;gap:8px}
   .pgbar{flex:1;height:8px;border-radius:4px;background:rgba(37,99,235,.15);overflow:hidden}
@@ -208,9 +210,10 @@
   <div id="sheet" class="sheet">
     <div class="grab" id="grab"><i></i>
       <div class="sumrow">
-        <div class="stat"><b id="stLen">–</b><span>ルート距離</span></div>
-        <div class="stat"><b id="stTime">–</b><span>徒歩（80m/分）</span></div>
-        <div class="stat"><b id="stCnt">–</b><span>沿線スポット</span></div>
+        <div class="stat"><b id="stLen">–</b><span>距離</span></div>
+        <div class="stat"><b id="stTime">–</b><span>徒歩</span></div>
+        <div class="stat"><b id="stSteps">–</b><span>歩数（目安）</span></div>
+        <div class="stat"><b id="stCnt">–</b><span>スポット</span></div>
       </div>
     </div>
     <div class="sheet-body" id="sheetBody">
@@ -236,6 +239,16 @@
         <p class="hint" style="margin-bottom:0">この範囲に入る観光スポットを「スポット」に表示します。</p>
       </div>
       <div class="card">
+        <h3>👣 歩幅（歩数の計算用）</h3>
+        <div class="row">
+          <input type="number" id="stride" min="30" max="130" step="1" value="70" inputmode="numeric" style="flex:0 0 96px;width:96px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;font:inherit;font-size:15px;background:var(--bg)">
+          <span style="flex:0 0 auto">cm</span>
+          <input type="number" id="height" min="100" max="220" step="1" placeholder="身長 cm" inputmode="numeric" style="flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:12px;font:inherit;font-size:15px;background:var(--bg)">
+          <button class="btn" id="strideCalc" style="flex:0 0 auto">身長から</button>
+        </div>
+        <p class="hint" style="margin-bottom:0">歩数＝距離÷歩幅で計算した目安です。歩幅の目安は「身長×0.45」（身長170cm→約77cm）。</p>
+      </div>
+      <div class="card">
         <h3>🛰 GPS で歩きながら記録</h3>
         <button class="btn wide" id="recBtn">⏺ 記録開始</button>
         <p class="hint" style="margin-bottom:0">歩いた道がそのままルートになり、近くのスポットを画面上部に表示します。</p>
@@ -254,8 +267,9 @@
       <button class="btn primary wide" id="tBtn">🔎 ルート沿いの観光スポットを探す</button>
       <div id="tStatus" class="status" style="display:none"></div>
       <div class="seg" id="tView" hidden>
-        <button data-v="all" class="on">すべて <span id="tCntAll"></span></button>
-        <button data-v="photo">📷 写真ありのみ <span id="tCntPhoto"></span></button>
+        <button data-v="all" class="on">観光 <span id="tCntAll"></span></button>
+        <button data-v="photo">📷 写真あり <span id="tCntPhoto"></span></button>
+        <button data-v="cafe">☕ カフェ <span id="tCntCafe"></span></button>
       </div>
       <div class="chips" id="tChips" style="margin-top:10px"></div>
       <ol class="spots" id="tList"></ol>
@@ -301,6 +315,7 @@
             <select id="vBase"><option value="night">ナイト（濃紺）</option><option value="seamlessphoto">航空写真</option><option value="voyager">モダン</option><option value="dark">ダーク</option><option value="pale">淡色地図</option><option value="std">標準地図</option></select></div>
         </div>
         <label class="toggle">観光スポットを順に表示<input type="checkbox" id="vTour" checked></label>
+        <label class="toggle" style="padding-top:0">カフェも表示（ルートに近い10件）<input type="checkbox" id="vCafe"></label>
         <label class="toggle" style="padding-top:0">PLATEAU のスポットも表示<input type="checkbox" id="vSpots"></label>
       </div>
       <button class="btn primary wide" id="vOpen">🎬 プレビューを開く</button>
@@ -385,6 +400,11 @@ const CATS = {
 };
 const NAME_KEYS = ["名称","name","Name","NAME","施設名称","施設名","ランドマーク名","駅名","公園名","title","gml:name","P13_003","N02_005","P20_002"];
 
+/* ========= 歩数 ========= */
+let STRIDE=0.70;   // 歩幅（m）
+try{ const v=+localStorage.getItem("pw_stride"); if(v>=0.3&&v<=1.3) STRIDE=v; }catch(e){}
+const stepsOf=m=>Math.round(m/STRIDE);
+const fmtSteps=m=>stepsOf(m).toLocaleString("ja-JP");
 /* ========= 状態 ========= */
 const state = { features: [], route: [], drawing:false, buffer:200, results:[], recording:false };
 
@@ -875,6 +895,7 @@ function analyze(){
   const len=routeLength(state.route);
   document.getElementById("stLen").textContent = state.route.length>1 ? (len/1000).toFixed(2)+"km" : "–";
   document.getElementById("stTime").textContent = state.route.length>1 ? Math.round(len/80)+"分" : "–";
+  document.getElementById("stSteps").textContent = state.route.length>1 ? fmtSteps(len)+"歩" : "–";
   if(state.route.length<2 || !state.features.length){ if(!state.tour) document.getElementById("stCnt").textContent="–"; document.getElementById("emptyHint").style.display="block"; state.results=[]; return; }
   const cum=[0]; for(let i=1;i<state.route.length;i++) cum.push(cum[i-1]+haversine(state.route[i-1],state.route[i]));
   // バウンディングボックスで前処理（高速化）
@@ -900,7 +921,7 @@ function analyze(){
       .bindPopup(popupHtml(r.f,extra)).addTo(hitLayer);
     const li=document.createElement("li");
     li.innerHTML=`<div class="num" style="background:${c.hex}">${n}</div><div><div class="sname">${esc(r.f.name||"（名称なし）")}</div>
-      <div class="smeta">${c.label}・${(r.along/1000).toFixed(2)}km地点・ルートから${Math.round(r.d)}m・徒歩${Math.round(r.along/80)}分</div></div>`;
+      <div class="smeta">${c.label}・${(r.along/1000).toFixed(2)}km地点（約${fmtSteps(r.along)}歩）・ルートから${Math.round(r.d)}m・徒歩${Math.round(r.along/80)}分</div></div>`;
     li.onclick=()=>{ map.setView(r.f.ll, Math.max(map.getZoom(),16)); m.openPopup(); };
     list.appendChild(li);
   });
@@ -910,8 +931,8 @@ function analyze(){
 /* ========= 出力 ========= */
 function download(name, text, type){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
 document.getElementById("csvBtn").onclick=()=>{
-  const rows=[["No","名称","カテゴリ","スタートからの距離(km)","ルートからの距離(m)","徒歩目安(分)","緯度","経度","出典"]];
-  state.results.forEach((r,i)=>rows.push([i+1,r.f.name||"",CATS[r.f.cat].label,(r.along/1000).toFixed(2),Math.round(r.d),Math.round(r.along/80),r.f.ll[0].toFixed(6),r.f.ll[1].toFixed(6),r.f.source||""]));
+  const rows=[["No","名称","カテゴリ","スタートからの距離(km)","歩数目安(歩)","ルートからの距離(m)","徒歩目安(分)","緯度","経度","出典"]];
+  state.results.forEach((r,i)=>rows.push([i+1,r.f.name||"",CATS[r.f.cat].label,(r.along/1000).toFixed(2),stepsOf(r.along),Math.round(r.d),Math.round(r.along/80),r.f.ll[0].toFixed(6),r.f.ll[1].toFixed(6),r.f.source||""]));
   download("route_spots.csv","﻿"+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n"),"text/csv");
 };
 document.getElementById("gjBtn").onclick=()=>{
@@ -921,6 +942,14 @@ document.getElementById("gjBtn").onclick=()=>{
   download("route_spots.geojson",JSON.stringify(fc,null,1),"application/geo+json");
 };
 
+/* ========= 歩幅の設定 ========= */
+(function(){
+  const st=document.getElementById("stride"), ht=document.getElementById("height");
+  st.value=Math.round(STRIDE*100);
+  const apply=()=>{ const v=+st.value; if(v>=30&&v<=130){ STRIDE=v/100; try{ localStorage.setItem("pw_stride",STRIDE); }catch(e){} analyze(); if(state.tour||state.cafes) renderTour(); } };
+  st.addEventListener("change",apply);
+  document.getElementById("strideCalc").onclick=()=>{ const h=+ht.value; if(h>=100&&h<=220){ st.value=Math.round(h*0.45); apply(); } else ht.focus(); };
+})();
 /* ========= GPS（現在地・歩行記録） ========= */
 const gps = { watch:null, recording:false, marker:null, acc:null, last:null };
 const fabStop=document.getElementById("fabStop");
@@ -1151,6 +1180,7 @@ const T_CATS={
   history: {label:"史跡・記念碑",   emoji:"📜", on:true},
   park:    {label:"公園・庭園",     emoji:"🌳", on:true},
   art:     {label:"アート",         emoji:"🎨", on:true},
+  cafe:    {label:"カフェ",         emoji:"☕", on:true},
   fun:     {label:"レジャー",       emoji:"🎡", on:true},
 };
 const V_MAX=25;                       // 動画に出す最大数
@@ -1158,6 +1188,7 @@ const tourLayer=L.layerGroup().addTo(map);
 const routeKey=()=>state.route.length+":"+(state.route[0]||[]).join()+":"+(state.route[state.route.length-1]||[]).join()+":"+state.buffer;
 function tStatus(m,err){ const el=document.getElementById("tStatus"); el.style.display="block"; el.textContent=m; el.classList.toggle("err",!!err); }
 function classify(t){
+  if(t.amenity==="cafe") return "cafe";
   if(/^(museum|gallery)$/.test(t.tourism)) return "museum";
   if(t.tourism==="viewpoint") return "view";
   if(/^(zoo|aquarium|theme_park)$/.test(t.tourism)) return "fun";
@@ -1199,6 +1230,7 @@ nwr["tourism"~"^(attraction|museum|gallery|viewpoint|artwork|zoo|aquarium|theme_
 nwr["historic"]["name"]${bb};
 nwr["amenity"="place_of_worship"]["name"]${bb};
 nwr["leisure"~"^(park|garden)$"]["name"]${bb};
+nwr["amenity"="cafe"]["name"]${bb};
 );out center tags;`;
   const P= silent ? (window.__vProg||{set(){},creep(){},stop(){},done(){}}) : progressUI("tStatus");
   const base= silent ? 0 : 0, span= silent ? 0 : 1;
@@ -1217,7 +1249,7 @@ nwr["leisure"~"^(park|garden)$"]["name"]${bb};
   if(!j){ if(!silent) P.done("検索サービスに接続できませんでした（"+errs.join("／")+"）。1〜2分おいて、もう一度お試しください。",true); throw new Error("failed"); }
   P.set(58,"② ルート沿いのスポットを選別中");
   const total=(j.elements||[]).length;
-  const cum=cumDist(state.route), seen=new Map();
+  const cum=cumDist(state.route), seen=new Map(), cafes=new Map();
   for(const el of j.elements||[]){
     const t=el.tags||{}, name=t["name:ja"]||t.name; if(!name) continue;
     const lat= el.lat ?? (el.center&&el.center.lat), lon= el.lon ?? (el.center&&el.center.lon); if(lat==null) continue;
@@ -1226,6 +1258,9 @@ nwr["leisure"~"^(park|garden)$"]["name"]${bb};
     const item={name, ll, cat:classify(t), score:scoreOf(t), d:pr.d, along:pr.along, wd:/^Q\d+$/.test(t.wikidata||"")?t.wikidata:"",
       wikiLang: wm?wm[1]:"", wikiTitle: wm?wm[2]:"", commons:t.wikimedia_commons||"", photo: /^https:\/\/upload\.wikimedia\.org\//.test(t.image||"")?t.image:"",
       osm:`https://www.openstreetmap.org/${el.type}/${el.id}`};
+    if(item.cat==="cafe"){           // カフェは別枠（チェーン店は同名が多いので場所も含めて区別）
+      item.hours=t.opening_hours||""; item.web=t.website||t["contact:website"]||""; item.brand=t.brand||"";
+      cafes.set(name+"@"+lat.toFixed(4)+","+lon.toFixed(4), item); continue; }
     const k=name.replace(/\s/g,""), old=seen.get(k);
     if(!old || item.score>old.score) seen.set(k,item);
   }
@@ -1236,10 +1271,12 @@ nwr["leisure"~"^(park|garden)$"]["name"]${bb};
   await fetchPhotos(list,(k,f)=>P.set(W[k][0]+(W[k][1]-W[k][0])*f));
   P.set(100,"完了");
   state.tour=list; state.tourKey=routeKey();
+  // カフェ：ルートに近い順に最大50件 → ルート順に
+  state.cafes=[...cafes.values()].sort((a,b)=>a.d-b.d).slice(0,50).sort((a,b)=>a.along-b.along);
   renderTour();
   const nPhoto=list.filter(t=>t.photo).length;
   if(!silent) P.done(list.length
-    ? `${list.length}件見つかりました（写真あり ${nPhoto}件）。周辺 ${total}件からルート沿い ${R}m 以内を選び、ルート順に表示しています。`
+    ? `観光スポット ${list.length}件（写真あり ${nPhoto}件）・カフェ ${state.cafes.length}件が見つかりました。ルート沿い ${R}m 以内を、ルート順に表示しています。`
     : total ? `周辺に ${total}件ありましたが、ルートから ${R}m 以内にはありませんでした。「② ルート」で距離を広げてみてください。`
             : "この範囲には登録されたスポットがありませんでした。");
 }
@@ -1258,27 +1295,30 @@ document.querySelectorAll("#tView button").forEach(b=>b.onclick=()=>{ state.tour
 function renderTour(){
   tourLayer.clearLayers(); renderTourChips();
   const ul=document.getElementById("tList"); ul.innerHTML="";
-  const all=state.tour||[], seg=document.getElementById("tView");
-  seg.hidden=!all.length;
+  const all=state.tour||[], cafes=state.cafes||[], seg=document.getElementById("tView");
+  seg.hidden=!(all.length||cafes.length);
+  document.getElementById("tCntCafe").textContent=`(${cafes.length})`;
   document.getElementById("tCntAll").textContent=`(${all.length})`;
   document.getElementById("tCntPhoto").textContent=`(${all.filter(t=>t.photo).length})`;
   if(all.length) document.getElementById("stCnt").textContent=all.length+"件";
-  const gal = state.tourView==="photo";
+  const gal = state.tourView==="photo", cafeV = state.tourView==="cafe";
   ul.classList.toggle("gallery", gal);
-  const shown=all.filter(t=>T_CATS[t.cat].on && (!gal || t.photo));
+  document.getElementById("tChips").style.display = cafeV ? "none" : "";
+  const shown = cafeV ? cafes : all.filter(t=>T_CATS[t.cat].on && (!gal || t.photo));
   if(gal && !shown.length) ul.innerHTML='<p class="hint">写真のあるスポットはありませんでした。</p>';
+  if(cafeV && !shown.length) ul.innerHTML='<p class="hint">ルート沿いにカフェは見つかりませんでした。「ルート」タブで距離を広げてみてください。</p>';
   shown.forEach((t,i)=>{
     const c=T_CATS[t.cat];
-    const m=L.marker(t.ll,{icon:L.divIcon({className:"",html:`<div class="tpin">${c.emoji}</div>`,iconSize:[30,30],iconAnchor:[15,15]})})
-      .bindPopup(`${t.photo?`<img src="${esc(t.photo)}" class="pphoto" alt="">`:""}<b>${esc(t.name)}</b><br>${c.emoji} ${c.label}<br>${t.desc?`<span class="pdesc">${esc(t.desc)}…</span><br>`:""}スタートから ${(t.along/1000).toFixed(2)}km／ルートから ${Math.round(t.d)}m`+
+    const m=L.marker(t.ll,{icon:L.divIcon({className:"",html:`<div class="tpin${t.cat==="cafe"?" cafe":""}">${c.emoji}</div>`,iconSize:[30,30],iconAnchor:[15,15]})})
+      .bindPopup(`${t.photo?`<img src="${esc(t.photo)}" class="pphoto" alt="">`:""}<b>${esc(t.name)}</b><br>${c.emoji} ${c.label}<br>${t.desc?`<span class="pdesc">${esc(t.desc)}…</span><br>`:""}スタートから ${(t.along/1000).toFixed(2)}km（約${fmtSteps(t.along)}歩）／ルートから ${Math.round(t.d)}m`+(t.hours?`<br>🕒 ${esc(t.hours)}`:"")+(t.web?`<br><a href="${esc(t.web)}" target="_blank" rel="noopener">公式サイト</a>`:"")+
         (t.wikiUrl?`<br><a href="${t.wikiUrl}" target="_blank" rel="noopener">Wikipedia</a> ・ `:"<br>")+
         `<a href="${t.osm}" target="_blank" rel="noopener">OSM</a> ・ <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.name)}" target="_blank" rel="noopener">Googleマップ</a> ・ <a href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(t.name)}" target="_blank" rel="noopener">写真を検索</a>`).addTo(tourLayer);
     const li=document.createElement("li");
     li.className="tli";
-    li.innerHTML=`${t.photo?`<img class="thumb" src="${esc(t.photo)}" loading="lazy" alt="">`:`<div class="thumb noimg">${c.emoji}</div>`}<div><div class="sname">${esc(t.name)}${t.score>=4?' <span class="star">★</span>':''}</div>
-      <div class="smeta">${c.emoji} ${c.label}・${(t.along/1000).toFixed(2)}km地点・ルートから${Math.round(t.d)}m</div>${t.desc?`<div class="sdesc">${esc(t.desc)}…</div>`:""}</div>`;
+    li.innerHTML=`${t.photo?`<img class="thumb" src="${esc(t.photo)}" loading="lazy" alt="">`:`<div class="thumb noimg${t.cat==="cafe"?" cafe":""}">${c.emoji}</div>`}<div><div class="sname">${esc(t.name)}${t.score>=4?' <span class="star">★</span>':''}</div>
+      <div class="smeta">${c.emoji} ${c.label}・${(t.along/1000).toFixed(2)}km地点（約${fmtSteps(t.along)}歩）・ルートから${Math.round(t.d)}m${t.hours?`<br>🕒 ${esc(t.hours)}`:""}</div>${t.desc?`<div class="sdesc">${esc(t.desc)}…</div>`:""}</div>`;
     if(gal){ li.className=""; li.innerHTML=`<img class="gimg" src="${esc(t.photo)}" loading="lazy" alt=""><div class="gb"><div class="sname">${esc(t.name)}${t.score>=4?' <span class="star">★</span>':''}</div>
-      <div class="smeta">${c.emoji} ${c.label}・${(t.along/1000).toFixed(2)}km地点</div></div>`; }
+      <div class="smeta">${c.emoji} ${(t.along/1000).toFixed(2)}km・約${fmtSteps(t.along)}歩</div></div>`; }
     li.onclick=()=>{ map.setView(t.ll, Math.max(map.getZoom(),16)); m.openPopup(); };
     ul.appendChild(li);
   });
@@ -1286,7 +1326,7 @@ function renderTour(){
 document.getElementById("tBtn").onclick=async ()=>{ const b=document.getElementById("tBtn"); b.disabled=true; try{ await searchTourism(false); }catch(e){} finally{ b.disabled=false; } };
 // ルートが変わったら古い結果を消す
 const _rc3 = routeChanged;
-routeChanged = function(fit){ _rc3(fit); if(state.tour && state.tourKey!==routeKey()){ state.tour=null; tourLayer.clearLayers(); document.getElementById("tList").innerHTML=""; document.getElementById("tChips").innerHTML=""; } };
+routeChanged = function(fit){ _rc3(fit); if(state.tour && state.tourKey!==routeKey()){ state.tour=null; state.cafes=null; tourLayer.clearLayers(); document.getElementById("tList").innerHTML=""; document.getElementById("tChips").innerHTML=""; } };
 
 
 /* ========= 動画：歩くイメージ ========= */
@@ -1352,6 +1392,8 @@ async function vPrepare(){
     const pick=(state.tour||[]).filter(t=>T_CATS[t.cat].on).slice().sort((a,b)=>(!!b.photo-!!a.photo)||(b.score-a.score)).slice(0,V_MAX);
     sp = sp.concat(pick.map(t=>({name:t.name, emoji:T_CATS[t.cat].emoji, kind:T_CATS[t.cat].label, along:t.along, ll:t.ll, photo:t.photo, desc:t.desc})));
   }
+  if(document.getElementById("vCafe").checked)
+    sp = sp.concat((state.cafes||[]).slice().sort((a,b)=>a.d-b.d).slice(0,10).map(t=>({name:t.name, emoji:"☕", kind:"カフェ", along:t.along, ll:t.ll})));
   if(document.getElementById("vSpots").checked)
     sp = sp.concat(state.results.slice(0,20).map(r=>({name:r.f.name||CATS[r.f.cat].label, emoji:{landmark:"🏙",park:"🌳",station:"🚉",shelter:"🏫",other:"📍"}[r.f.cat], kind:"PLATEAU・"+CATS[r.f.cat].label, along:r.along, ll:r.f.ll})));
   V.spots = sp.sort((a,b)=>a.along-b.along).map(x=>Object.assign(x,{xy:V.toXY(x.ll[0],x.ll[1])}));
@@ -1451,7 +1493,10 @@ function vFrame(prog, tSec){
   g.fillText((d/1000).toFixed(2), bx, barY-16*u);
   const kw=g.measureText((d/1000).toFixed(2)).width; g.font=`600 ${18*u}px ${FONT}`; g.fillStyle="#7dd3fc"; g.fillText(" km", bx+kw, barY-16*u);
   g.textAlign="right"; g.fillStyle="rgba(224,242,254,.9)"; g.font=`500 ${17*u}px ${FONT}`;
-  g.fillText(`徒歩 ${Math.round(d/80)}分 / ${Math.round(V.L/80)}分` + (V.spots.length?`　スポット ${shown}/${V.spots.length}`:""), bx+bw, barY-18*u);
+  g.fillStyle="#fff"; g.font=`800 ${26*u}px ${FONT}`; g.fillText(`👣 ${fmtSteps(d)}`, bx+bw-22*u, barY-40*u);
+  g.fillStyle="#7dd3fc"; g.font=`600 ${15*u}px ${FONT}`; g.fillText("歩", bx+bw, barY-40*u);
+  g.fillStyle="rgba(224,242,254,.9)"; g.font=`500 ${15*u}px ${FONT}`;
+  g.fillText(`徒歩 ${Math.round(d/80)}分 / ${Math.round(V.L/80)}分` + (V.spots.length?`　スポット ${shown}/${V.spots.length}`:""), bx+bw, barY-14*u);
   if(latest){
     const age=Math.min(1,(d-latest.along)/(V.L*0.03+1)), a3=Math.min(1,age*3), slide=(1-a3)*16*u;
     g.globalAlpha=a3;
