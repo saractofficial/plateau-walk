@@ -106,6 +106,7 @@
   .ios-sw{display:inline-block;width:40px;height:24px;border-radius:12px;background:#34c759;position:relative}
   .ios-sw::after{content:"";position:absolute;right:2px;top:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3)}
   .gnote{font-size:12.5px;color:#92400e;background:#fef3c7;border-radius:10px;padding:8px 10px;margin-top:8px;line-height:1.6}
+  .exbar.ask{padding:0;background:none}
   .exbar{margin-top:8px;padding:8px 12px;border-radius:12px;background:var(--accent-soft);color:#1e3a8a;font-size:12.5px;cursor:pointer}
   .exbar[hidden]{display:none}
   .exbar .pg b{font-size:12px}
@@ -291,7 +292,7 @@
     <!-- ルート -->
     <section class="pane on" id="pane-route">
       <div class="ptitle">ルート</div>
-      <p class="psub">上の検索か右の📍で地点を追加すると、ルート沿いのスポットを自動で調べます</p>
+      <p class="psub">上の検索か右の📍で、スタート → 経由地 → ゴールを追加します</p>
       <div class="card">
         <ol class="wps" id="wpList"></ol>
         <label class="toggle">道に沿った徒歩ルートにする<input type="checkbox" id="snapRoad" checked></label>
@@ -323,6 +324,7 @@
     <section class="pane" id="pane-result">
       <div class="ptitle">スポット</div>
       <p class="psub">ルート沿いの観光スポット・カフェを、スタートからの順に表示します</p>
+      <button class="btn primary wide" id="tBtn">🔎 沿線のスポットを調べる</button>
       <div id="tStatus" class="status" style="display:none"></div>
       <div class="seg" id="tView" hidden>
         <button data-v="all" class="on">観光 <span id="tCntAll"></span></button>
@@ -331,8 +333,8 @@
       </div>
       <div class="chips" id="tChips" style="margin-top:10px"></div>
       <ol class="spots" id="tList"></ol>
-      <div class="empty" id="tEmpty">🗺️<br><b>まだスポットがありません</b><br>「ルート」タブで地点を2つ以上追加すると、自動で調べて表示します。</div>
-      <button class="btn wide" id="tBtn" style="margin-top:12px">🔄 もう一度調べる</button>
+      <div class="empty" id="tEmpty">🗺️<br><b>まだスポットがありません</b><br>「ルート」タブで地点を2つ以上追加して、「🔎 沿線のスポットを調べる」を押してください。</div>
+      
       <h2>Google マップで見る</h2>
       <div id="gLinks" class="glinks"></div>
       <ol class="spots" id="gList"></ol>
@@ -380,7 +382,7 @@
 
       <div class="card">
         <h3>🏙 PLATEAU（3D都市モデル）</h3>
-        <label class="toggle">ルート周辺のデータを自動で取得<input type="checkbox" id="plWithSpots" checked></label>
+        <label class="toggle">スポットを調べるときに一緒に取得<input type="checkbox" id="plWithSpots" checked></label>
         <p class="hint" style="margin-top:0">オンにしておくと、データがある地域ではランドマーク・公園・駅もスポットに加わります（329都市で整備。ない地域では自動でスキップ）。</p>
         <details class="sub">
           <summary>手動で取得する</summary>
@@ -460,6 +462,9 @@ const CATS = {
 };
 const NAME_KEYS = ["名称","name","Name","NAME","施設名称","施設名","ランドマーク名","駅名","公園名","title","gml:name","P13_003","N02_005","P20_002"];
 
+/* ========= 通信量のカウント（JSONなどテキストの受信量） ========= */
+const NET={bytes:0};
+const fmtMB=b=>b<1e6 ? Math.max(1,Math.round(b/1e3))+"KB" : (b/1e6).toFixed(1)+"MB";
 /* ========= 歩数 ========= */
 let STRIDE=0.70;   // 歩幅（m）
 try{ const v=+localStorage.getItem("pw_stride"); if(v>=0.3&&v<=1.3) STRIDE=v; }catch(e){}
@@ -754,7 +759,7 @@ async function plateauFetch(codes, label, P){
   let total=0, msgs=[], k=0;
   for(const {d,url} of items){
     P.set(20+75*k/items.length, `ダウンロード中：${d.name}`);
-    try{ const t=await (await fetch(url)).text(); const n=ingest(t,d.name,d.typeCode); total+=n; msgs.push(`・${d.name}：${n}件`); }
+    try{ const t=await (await fetch(url)).text(); NET.bytes+=t.length; const n=ingest(t,d.name,d.typeCode); total+=n; msgs.push(`・${d.name}：${n}件`); }
     catch(e){ msgs.push(`・${d.name}：取得できませんでした`); }
     k++;
   }
@@ -949,7 +954,7 @@ async function searchPlace(){
   });
 }
 const bufEl=document.getElementById("buffer");
-bufEl.onchange=()=>scheduleExplore(800);
+bufEl.onchange=()=>scheduleExplore();
 bufEl.oninput=()=>{ state.buffer=+bufEl.value; document.getElementById("bufferVal").textContent=state.buffer+" m"; drawCorridor(); analyze(); };
 
 function parseRouteFile(text, name){
@@ -1220,7 +1225,7 @@ function stopRecording(){
   const len=routeLength(state.route);
   setStatus("routeStatus",`記録を停止しました（${(len/1000).toFixed(2)} km・約${fmtSteps(len)}歩・${fmtTime((Date.now()-gps.start)/1000)}）`);
   toast(`⏹ 記録を停止しました：${(len/1000).toFixed(2)} km・約${fmtSteps(len)}歩`,"ok",5000);
-  if(state.route.length>1){ map.fitBounds(L.latLngBounds(state.route).pad(0.15)); scheduleExplore(500); }
+  if(state.route.length>1){ map.fitBounds(L.latLngBounds(state.route).pad(0.15)); scheduleExplore(); }
 }
 recBtn.onclick=()=>{ state.recording ? stopRecording() : startRecording(false); };
 /* ========= 位置情報の設定ガイド ========= */
@@ -1405,7 +1410,7 @@ function progressUI(elId){
 
 /* ========= スポットの写真（Wikipedia / Wikidata / Wikimedia Commons） ========= */
 const chunk=(a,n)=>{ const o=[]; for(let i=0;i<a.length;i+=n) o.push(a.slice(i,i+n)); return o; };
-async function wget(url){ const r=await fetch(url); if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }
+async function wget(url){ const r=await fetch(url); if(!r.ok) throw new Error("HTTP "+r.status); const t=await r.text(); NET.bytes+=t.length; return JSON.parse(t); }
 async function fetchPhotos(list, onProg){
   const step=(k,n)=>onProg&&onProg(k,n);
   // 1) Wikidata → 日本語版Wikipediaの記事名・画像(P18)
@@ -1426,7 +1431,7 @@ async function fetchPhotos(list, onProg){
   for(let i=0;i<wpJobs.length;i++){
     const [lang,titles]=wpJobs[i];
     try{
-      const j=await wget(`https://${lang}.wikipedia.org/w/api.php?action=query&prop=pageimages|extracts&piprop=thumbnail&pithumbsize=480&exintro=1&explaintext=1&exchars=90&exlimit=20&redirects=1&titles=${encodeURIComponent(titles.join("|"))}&format=json&origin=*`);
+      const j=await wget(`https://${lang}.wikipedia.org/w/api.php?action=query&prop=pageimages|extracts&piprop=thumbnail&pithumbsize=320&exintro=1&explaintext=1&exchars=90&exlimit=20&redirects=1&titles=${encodeURIComponent(titles.join("|"))}&format=json&origin=*`);
       const q=j.query||{}, alias={}; (q.normalized||[]).concat(q.redirects||[]).forEach(x=>alias[x.from]=x.to);
       const final=t=>{ let k=t, g=0; while(alias[k]&&g++<3) k=alias[k]; return k; };
       const pages={}; Object.values(q.pages||{}).forEach(p=>pages[p.title]=p);
@@ -1442,7 +1447,7 @@ async function fetchPhotos(list, onProg){
   const need=list.filter(t=>!t.photo && t.commons && /^File:/i.test(t.commons));
   const cmBatches=chunk([...new Set(need.map(t=>t.commons))],40);
   for(let i=0;i<cmBatches.length;i++){
-    try{ const j=await wget(`https://commons.wikimedia.org/w/api.php?action=query&prop=imageinfo&iiprop=url&iiurlwidth=480&titles=${encodeURIComponent(cmBatches[i].join("|"))}&format=json&origin=*`);
+    try{ const j=await wget(`https://commons.wikimedia.org/w/api.php?action=query&prop=imageinfo&iiprop=url&iiurlwidth=320&titles=${encodeURIComponent(cmBatches[i].join("|"))}&format=json&origin=*`);
       const q=j.query||{}, alias={}; (q.normalized||[]).forEach(x=>alias[x.from]=x.to);
       const pages={}; Object.values(q.pages||{}).forEach(p=>pages[p.title]=p);
       need.filter(t=>cmBatches[i].includes(t.commons)).forEach(t=>{ const p=pages[alias[t.commons]||t.commons]; const ii=p&&p.imageinfo&&p.imageinfo[0]; if(ii) t.photo=ii.thumburl||ii.url; });
@@ -1511,7 +1516,7 @@ async function searchTourism(silent, Pext){
   let s=90,n=-90,w=180,e=-180; state.route.forEach(p=>{ s=Math.min(s,p[0]); n=Math.max(n,p[0]); w=Math.min(w,p[1]); e=Math.max(e,p[1]); });
   const dLat=R/111000*1.1, dLng=dLat/Math.cos(toRad((s+n)/2));
   const bb=`(${(s-dLat).toFixed(5)},${(w-dLng).toFixed(5)},${(n+dLat).toFixed(5)},${(e+dLng).toFixed(5)})`;
-  const q=`[out:json][timeout:40][maxsize:67108864];(
+  const q=`[out:json][timeout:25][maxsize:33554432];(
 nwr["tourism"~"^(attraction|museum|gallery|viewpoint|artwork|zoo|aquarium|theme_park)$"]["name"]${bb};
 nwr["historic"]["name"]${bb};
 nwr["amenity"="place_of_worship"]["name"]${bb};
@@ -1521,18 +1526,28 @@ nwr["amenity"="cafe"]["name"]${bb};
   const P= Pext || (silent ? (window.__vProg||{set(){},creep(){},stop(){},done(){}}) : progressUI("tStatus"));
   const base= silent ? 0 : 0, span= silent ? 0 : 1;
   let j=null, errs=[], tries=0;
+  const LIMIT=25;   // 1サーバーあたり最大25秒待つ
   for(const ep of OVERPASS){
-    P.creep(tries*8, 55, tries ? `予備サーバーで再検索中…（${tries+1}/${OVERPASS.length}）` : "① スポットを検索中（OpenStreetMap）", 9); tries++;
+    const lo=tries*(55/OVERPASS.length), hi=lo+55/OVERPASS.length;
+    const label = tries ? `予備サーバー ${tries+1}/${OVERPASS.length} で再検索中` : "① スポットを検索中（OpenStreetMap）";
+    const ac=new AbortController(), t0=Date.now();
+    // 残り秒数を見せながら、このサーバーの持ち時間の範囲で％を進める
+    P.set(lo,label);
+    const tick=setInterval(()=>{ const el=(Date.now()-t0)/1000; P.set(lo+(hi-lo)*Math.min(.98,el/LIMIT), `${label}（残り${Math.max(0,Math.ceil(LIMIT-el))}秒）`); },100);
+    const kill=setTimeout(()=>ac.abort(), LIMIT*1000);
+    tries++;
     try{
-      const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});
+      const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"},signal:ac.signal});
       if(!r.ok) throw new Error(r.status===429||r.status===504 ? "混雑中" : "HTTP "+r.status);
-      const jj=await r.json();
+      const txt=await r.text(); NET.bytes+=txt.length;
+      const jj=JSON.parse(txt);
       if(jj.remark && !(jj.elements&&jj.elements.length)) throw new Error("処理が打ち切られました");
       j=jj; break;
-    }catch(e){ errs.push(e.message); }
+    }catch(e){ errs.push(e.name==="AbortError" ? `${LIMIT}秒応答なし` : e.message); }
+    finally{ clearInterval(tick); clearTimeout(kill); }
   }
   P.stop();
-  if(!j){ if(!silent) P.done("検索サービスに接続できませんでした（"+errs.join("／")+"）。1〜2分おいて、もう一度お試しください。",true); throw new Error("failed"); }
+  if(!j){ state.lastErr=errs.join("／"); if(!silent) P.done("検索サービスに接続できませんでした（"+errs.join("／")+"）。1〜2分おいて、もう一度お試しください。",true); throw new Error("failed"); }
   P.set(58,"② ルート沿いのスポットを選別中");
   const total=(j.elements||[]).length;
   const cum=cumDist(state.route), seen=new Map(), cafes=new Map();
@@ -1631,31 +1646,32 @@ function exBarProgress(){
 }
 const refit=()=>requestAnimationFrame(()=>sheetTo(sheet.state));
 new ResizeObserver(refit).observe(document.getElementById("grab"));
-function scheduleExplore(delay=2000){
-  if(state.recording || state.route.length<2) return;
+// ルートが変わったら「調べる」ボタンを出す（自動では通信しない）
+function scheduleExplore(){
+  if(state.recording || state.route.length<2 || exRunning) return;
   if(routeKey()===state.exploreKey) return;
-  clearTimeout(exTimer);
-  exBar.hidden=false; exBar.className="exbar"; exBar.textContent="⏳ ルートが決まったら、沿線のスポットを自動で調べます…";
-  exTimer=setTimeout(()=>runExplore(false), delay);
+  exBar.hidden=false; exBar.className="exbar ask";
+  exBar.innerHTML='<button class="btn primary wide" id="exGo">🔎 沿線のスポットを調べる</button>';
 }
 async function runExplore(force){
   if(state.recording || state.route.length<2) return;
   const key=routeKey(); if(!force && key===state.exploreKey) return;
   if(exRunning){ exQueued=true; return; }
-  exRunning=true; state.exploreKey=key;
+  exRunning=true; state.exploreKey=key; NET.bytes=0;
   const P=exBarProgress();
   let pl=Promise.resolve(0);
   if(document.getElementById("plWithSpots").checked && (force || state.plKey!==key)){ state.plKey=key; pl=plateauAuto(true).catch(()=>0); }
   let ok=true; try{ await searchTourism(true,P); }catch(e){ ok=false; }
   await pl; renderTour();
   const nt=mergeTour().length, nc=(state.cafes||[]).length;
-  P.done(ok ? `✅ 観光 ${nt}件・カフェ ${nc}件が見つかりました（タップで一覧）` : "⚠️ 検索サービスが混んでいるようです。タップでもう一度調べます", !ok);
+  P.done(ok ? `✅ 観光 ${nt}件・カフェ ${nc}件（通信 約${fmtMB(NET.bytes)}）タップで一覧` : `⚠️ 検索サービスが混んでいます（${state.lastErr||""}）。タップでもう一度`, !ok);
+  if(!ok) state.exploreKey=null;
   const bd=document.getElementById("tabBadge");
   if(ok && document.querySelector(".tabs button.on").dataset.tab!=="result" && nt+nc){ bd.textContent=nt+nc; bd.hidden=false; }
   exRunning=false;
   if(exQueued){ exQueued=false; runExplore(false); }
 }
-exBar.onclick=()=>{ if(exBar.classList.contains("err")) runExplore(true); else showTab("result"); };
+exBar.onclick=e=>{ if(exBar.classList.contains("ask")||exBar.classList.contains("err")) runExplore(true); else if(exBar.classList.contains("done")) showTab("result"); };
 document.querySelector('.tabs [data-tab="result"]').addEventListener("click",()=>document.getElementById("tabBadge").hidden=true);
 document.getElementById("tBtn").onclick=()=>runExplore(true);
 
@@ -1929,7 +1945,7 @@ routeChanged = function(fit){ _rc2(fit); renderGLinks(); };
 renderGLinks();
 
 window.__tourReady=true;
-if(state.route.length>1) setTimeout(()=>scheduleExplore(300),800);
+if(state.route.length>1) setTimeout(()=>scheduleExplore(),500);
 loadManifest();
 </script>
 </body>
