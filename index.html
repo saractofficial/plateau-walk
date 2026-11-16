@@ -106,6 +106,20 @@
   .ios-sw{display:inline-block;width:40px;height:24px;border-radius:12px;background:#34c759;position:relative}
   .ios-sw::after{content:"";position:absolute;right:2px;top:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3)}
   .gnote{font-size:12.5px;color:#92400e;background:#fef3c7;border-radius:10px;padding:8px 10px;margin-top:8px;line-height:1.6}
+  .exbar{margin-top:8px;padding:8px 12px;border-radius:12px;background:var(--accent-soft);color:#1e3a8a;font-size:12.5px;cursor:pointer}
+  .exbar[hidden]{display:none}
+  .exbar .pg b{font-size:12px}
+  .exbar.done{background:#ecfdf5;color:#065f46}
+  .exbar.err{background:#fef2f2;color:#991b1b}
+  .tabbar button{position:relative}
+  .badge{position:absolute;top:6px;left:calc(50% + 6px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#ef4444;color:#fff;font-size:10.5px;font-style:normal;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .badge[hidden]{display:none}
+  .empty{text-align:center;color:var(--sub);font-size:13px;line-height:1.8;padding:28px 10px;background:var(--bg);border-radius:16px;margin-top:10px}
+  .empty b{color:var(--ink);font-size:15px}
+  .srcbadge{display:inline-block;font-size:10px;font-weight:700;color:#7c3aed;background:#f3e8ff;border-radius:6px;padding:1px 6px;margin-left:4px;vertical-align:2px}
+  details.sub{margin-top:8px;background:var(--bg);border-radius:12px;padding:10px 12px}
+  details.sub summary{font-size:13px;font-weight:600;cursor:pointer;color:var(--ink)}
+  .num-in{padding:11px 12px;border:1px solid var(--line);border-radius:12px;font:inherit;font-size:15px;background:var(--bg)}
   /* ===== ボトムシート ===== */
   .sheet{position:absolute;z-index:1003;left:0;right:0;bottom:var(--navH);height:calc(100dvh - var(--navH) - var(--topS) - 70px);background:var(--panel);border-radius:22px 22px 0 0;box-shadow:0 -8px 30px rgba(15,23,42,.18);display:flex;flex-direction:column;transform:translateY(calc(100% - 128px));transition:transform .32s cubic-bezier(.2,.8,.2,1);will-change:transform}
   .sheet.dragging{transition:none}
@@ -270,13 +284,14 @@
         <div class="stat"><b id="stSteps">–</b><span>歩（目安）</span></div>
         <div class="stat"><b id="stCnt">–</b><span>スポット</span></div>
       </div>
+      <div class="exbar" id="exBar" hidden></div>
     </div>
     <div class="sheet-body" id="sheetBody">
 
     <!-- ルート -->
     <section class="pane on" id="pane-route">
       <div class="ptitle">ルート</div>
-      <p class="psub">上の検索や地図タップで、スタート → 経由地 → ゴールを追加します</p>
+      <p class="psub">上の検索か右の📍で地点を追加すると、ルート沿いのスポットを自動で調べます</p>
       <div class="card">
         <ol class="wps" id="wpList"></ol>
         <label class="toggle">道に沿った徒歩ルートにする<input type="checkbox" id="snapRoad" checked></label>
@@ -289,28 +304,16 @@
         <div id="routeStatus" class="status">ルート未設定</div>
       </div>
       <div class="card">
-        <h3>🔵 ルートからの距離 <b id="bufferVal" style="margin-left:auto;color:var(--accent)">200 m</b></h3>
+        <h3>🔵 ルートから何mまで探す？ <b id="bufferVal" style="margin-left:auto;color:var(--accent)">200 m</b></h3>
         <input type="range" id="buffer" min="50" max="1000" step="50" value="200" style="width:100%">
-        <p class="hint" style="margin-bottom:0">この範囲に入る観光スポットを「スポット」に表示します。</p>
-      </div>
-      <div class="card">
-        <h3>👣 歩幅（歩数の計算用）</h3>
-        <div class="row">
-          <input type="number" id="stride" min="30" max="130" step="1" value="70" inputmode="numeric" style="flex:0 0 96px;width:96px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;font:inherit;font-size:15px;background:var(--bg)">
-          <span style="flex:0 0 auto">cm</span>
-          <input type="number" id="height" min="100" max="220" step="1" placeholder="身長 cm" inputmode="numeric" style="flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:12px;font:inherit;font-size:15px;background:var(--bg)">
-          <button class="btn" id="strideCalc" style="flex:0 0 auto">身長から</button>
-        </div>
-        <p class="hint" style="margin-bottom:0">歩数＝距離÷歩幅で計算した目安です。歩幅の目安は「身長×0.45」（身長170cm→約77cm）。</p>
       </div>
       <div class="card">
         <h3>🛰 GPS で歩きながら記録</h3>
         <button class="btn wide" id="recBtn">⏺ 記録開始</button>
-        <button class="btn wide" id="geoHelpBtn" style="margin-top:8px;background:transparent;color:var(--accent)">📍 位置情報が取れないときは</button>
-        <p class="hint" style="margin-bottom:0">歩いた道がそのままルートになり、近くのスポットを画面上部に表示します。</p>
+        <button class="btn wide" id="geoHelpBtn" style="margin-top:8px;background:transparent;color:var(--accent)">📍 位置情報（GPS）が取れないときは</button>
       </div>
       <div class="card">
-        <h3>📂 読み込み</h3>
+        <h3>📂 ルートを読み込む</h3>
         <div class="drop" id="routeDrop">GPX / KML / GeoJSON を選択<input type="file" id="routeIn" accept=".gpx,.kml,.geojson,.json" hidden></div>
         <button class="btn wide" id="sampleBtn" style="margin-top:8px">サンプル：目黒川沿い（中目黒→五反田）</button>
       </div>
@@ -319,40 +322,22 @@
     <!-- スポット -->
     <section class="pane" id="pane-result">
       <div class="ptitle">スポット</div>
-      <p class="psub">ルート沿いの観光スポットを、スタートからの順に表示します</p>
-      <button class="btn primary wide" id="tBtn">🔎 ルート沿いの観光スポットを探す</button>
+      <p class="psub">ルート沿いの観光スポット・カフェを、スタートからの順に表示します</p>
       <div id="tStatus" class="status" style="display:none"></div>
       <div class="seg" id="tView" hidden>
         <button data-v="all" class="on">観光 <span id="tCntAll"></span></button>
-        <button data-v="photo">📷 写真あり <span id="tCntPhoto"></span></button>
+        <button data-v="photo">📷 写真 <span id="tCntPhoto"></span></button>
         <button data-v="cafe">☕ カフェ <span id="tCntCafe"></span></button>
       </div>
       <div class="chips" id="tChips" style="margin-top:10px"></div>
       <ol class="spots" id="tList"></ol>
-      <p class="hint">名所・史跡・寺社・博物館・展望スポット・公園などを OpenStreetMap から探し、写真と説明を Wikipedia から取得します。</p>
-
-      <h2>PLATEAU の沿線スポット</h2>
-      <ol class="spots" id="spotList"></ol>
-      <p class="hint" id="emptyHint">観光スポットを探すと、PLATEAU のデータがある地域では、ルート沿いのランドマーク・公園・駅もここに並びます。</p>
-      <div class="row">
-        <button class="btn" id="csvBtn">CSV出力</button>
-        <button class="btn" id="gjBtn">GeoJSON出力</button>
-      </div>
-
-      <h2>Google マップでも探す</h2>
+      <div class="empty" id="tEmpty">🗺️<br><b>まだスポットがありません</b><br>「ルート」タブで地点を2つ以上追加すると、自動で調べて表示します。</div>
+      <button class="btn wide" id="tBtn" style="margin-top:12px">🔄 もう一度調べる</button>
+      <h2>Google マップで見る</h2>
       <div id="gLinks" class="glinks"></div>
-      <details class="gbox" id="gBox">
-        <summary>APIキーを使って一覧表示する（任意）</summary>
-        <div class="row" style="margin-top:8px">
-          <input type="password" id="gKey" placeholder="Google Maps Platform APIキー" autocomplete="off">
-          <button class="btn" id="gKeySave" style="flex:0 0 auto">保存</button>
-        </div>
-        <p class="hint">「Maps JavaScript API」と「Places API (New)」を有効にしたキーが必要です。キーはこの端末内だけに保存されます。「ウェブサイトの制限」で <code>saractofficial.github.io/*</code> を設定してください。</p>
-        <button class="btn primary wide" id="gSearch">Google でおすすめを探す</button>
-        <div id="gStatus" class="status" style="display:none"></div>
-      </details>
       <ol class="spots" id="gList"></ol>
       <div id="gAttr" class="gattr" style="display:none">Google Maps</div>
+      <p class="hint">出典：OpenStreetMap、Wikipedia／Wikimedia Commons、PLATEAU（国土交通省）</p>
     </section>
 
     <!-- 動画 -->
@@ -372,37 +357,61 @@
         </div>
         <label class="toggle">観光スポットを順に表示<input type="checkbox" id="vTour" checked></label>
         <label class="toggle" style="padding-top:0">カフェも表示（ルートに近い10件）<input type="checkbox" id="vCafe"></label>
-        <label class="toggle" style="padding-top:0">PLATEAU のスポットも表示<input type="checkbox" id="vSpots"></label>
       </div>
       <button class="btn primary wide" id="vOpen">🎬 プレビューを開く</button>
       <p class="hint">プレビューで「動画を作る」を押すと録画して保存できます。iPhone は共有メニューの「ビデオを保存」で写真アプリに入ります。</p>
     </section>
 
-    <!-- データ -->
+    <!-- 設定 -->
     <section class="pane" id="pane-data">
-      <div class="ptitle">データ</div>
-      <p class="psub">国土交通省 PLATEAU（3D都市モデル）のランドマーク・公園・駅のデータ</p>
+      <div class="ptitle">設定</div>
+      <p class="psub">ふだんは触らなくても大丈夫です。必要なときだけ変更してください</p>
+
       <div class="card">
-        <h3>📍 ルート周辺のデータを自動で取得</h3>
-        <p class="hint" style="margin-top:0">ルート（なければ地図の中心）がある市区町村を自動で調べ、PLATEAU のランドマーク・公園・駅のデータを読み込みます。番号の入力は不要です。</p>
-        <button class="btn primary wide" id="plAuto">📍 ルート周辺の PLATEAU データを取得</button>
-        <label class="toggle">「スポット」で探すときに自動で取得<input type="checkbox" id="plWithSpots" checked></label>
-        <div id="dataStatus" class="status">データ未読み込み</div>
+        <h3>👣 歩幅（歩数の計算用）</h3>
+        <div class="row">
+          <input type="number" id="stride" min="30" max="130" step="1" value="70" inputmode="numeric" class="num-in" style="flex:0 0 90px;width:90px">
+          <span style="flex:0 0 auto">cm</span>
+          <input type="number" id="height" min="100" max="220" step="1" placeholder="身長 cm" inputmode="numeric" class="num-in" style="flex:1;min-width:0">
+          <button class="btn" id="strideCalc" style="flex:0 0 auto">身長から</button>
+        </div>
+        <p class="hint" style="margin-bottom:0">歩数＝距離÷歩幅の目安。歩幅の目安は「身長×0.45」（170cm→約77cm）。</p>
       </div>
+
       <div class="card">
-        <h3>🗾 地域を名前で選ぶ</h3>
-        <p class="hint" style="margin-top:0">PLATEAU のデータがある地域だけが表示されます。</p>
-        <select id="plPref"><option value="">都道府県を選ぶ</option></select>
-        <select id="plCity" style="margin-top:8px" disabled><option value="">市区町村を選ぶ</option></select>
-        <button class="btn wide" id="plGo" style="margin-top:8px" disabled>この地域のデータを取得</button>
+        <h3>🏙 PLATEAU（3D都市モデル）</h3>
+        <label class="toggle">ルート周辺のデータを自動で取得<input type="checkbox" id="plWithSpots" checked></label>
+        <p class="hint" style="margin-top:0">オンにしておくと、データがある地域ではランドマーク・公園・駅もスポットに加わります（329都市で整備。ない地域では自動でスキップ）。</p>
+        <details class="sub">
+          <summary>手動で取得する</summary>
+          <button class="btn wide" id="plAuto" style="margin-top:8px">📍 今のルート周辺を取得</button>
+          <select id="plPref" style="margin-top:8px"><option value="">都道府県を選ぶ</option></select>
+          <select id="plCity" style="margin-top:8px" disabled><option value="">市区町村を選ぶ</option></select>
+          <button class="btn wide" id="plGo" style="margin-top:8px" disabled>この地域のデータを取得</button>
+          <div class="drop" id="drop" style="margin-top:8px">手元の GeoJSON / CZML を読み込む<input type="file" id="fileIn" multiple accept=".geojson,.json,.czml" hidden></div>
+        </details>
+        <div id="dataStatus" class="status">まだ読み込んでいません</div>
+        <details class="sub">
+          <summary>読み込んだ PLATEAU スポットの一覧・出力</summary>
+          <div class="chips" id="catChips" style="margin:8px 0"></div>
+          <ol class="spots" id="spotList"></ol>
+          <p class="hint" id="emptyHint"></p>
+          <div class="row"><button class="btn" id="csvBtn">CSV出力</button><button class="btn" id="gjBtn">GeoJSON出力</button></div>
+        </details>
       </div>
+
       <div class="card">
-        <h3>対象カテゴリ</h3>
-        <div class="chips" id="catChips"></div>
-      </div>
-      <div class="card">
-        <h3>手元のファイルを読み込む</h3>
-        <div class="drop" id="drop">GeoJSON / CZML を選択<input type="file" id="fileIn" multiple accept=".geojson,.json,.czml" hidden></div>
+        <h3>🔑 Google の口コミ評価つき一覧（任意）</h3>
+        <details class="sub" id="gBox">
+          <summary>APIキーを設定する</summary>
+          <div class="row" style="margin-top:8px">
+            <input type="password" id="gKey" placeholder="Google Maps Platform APIキー" autocomplete="off">
+            <button class="btn" id="gKeySave" style="flex:0 0 auto">保存</button>
+          </div>
+          <p class="hint">「Maps JavaScript API」と「Places API (New)」を有効にしたキーが必要です。キーはこの端末内だけに保存されます。「ウェブサイトの制限」で <code>saractofficial.github.io/*</code> を設定してください。</p>
+          <button class="btn primary wide" id="gSearch">Google でおすすめを探す</button>
+          <div id="gStatus" class="status" style="display:none"></div>
+        </details>
       </div>
     </section>
     </div>
@@ -411,9 +420,9 @@
   <!-- 下部タブバー -->
   <nav class="tabs tabbar">
     <button data-tab="route" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H16a3.5 3.5 0 0 0 0-7H8a3.5 3.5 0 0 1 0-7h7.5"/></svg>ルート</button>
-    <button data-tab="result"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg>スポット</button>
+    <button data-tab="result"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg>スポット<i class="badge" id="tabBadge" hidden></i></button>
     <button data-tab="video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="14" height="14" rx="3"/><path d="m17 10 4-2.5v9L17 14"/></svg>動画</button>
-    <button data-tab="data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>データ</button>
+    <button data-tab="data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>設定</button>
   </nav>
 </div>
 
@@ -498,8 +507,8 @@ L.control.scale({imperial:false, position:"topleft"}).addTo(map);
 
 const corridorLayer = L.layerGroup().addTo(map);
 const routeLayer = L.layerGroup().addTo(map);
-const allLayer = L.layerGroup().addTo(map);   // 全スポット（薄く）
-const hitLayer = L.layerGroup().addTo(map);   // 沿線スポット（番号付き）
+const allLayer = L.layerGroup();   // 全スポット（薄く）
+const hitLayer = L.layerGroup();   // 沿線スポット（番号付き）
 
 /* ========= UI: タブ ========= */
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
@@ -508,13 +517,14 @@ function showTab(t){
   document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));
   document.querySelectorAll(".pane").forEach(p=>p.classList.toggle("on",p.id==="pane-"+t));
   document.getElementById("sheetBody").scrollTop=0;
+  if(t==="result"){ const bd=document.getElementById("tabBadge"); if(bd) bd.hidden=true; }
   if(sheet.state==="peek" || (same && sheet.state!=="full")) sheetTo(same&&sheet.state==="half"?"full":"half");
 }
 /* ========= ボトムシート（ドラッグで3段階） ========= */
 const sheet={el:document.getElementById("sheet"), state:"peek"};
 const isWide=()=>matchMedia("(min-width:900px)").matches;
 function sheetOffset(st){
-  const h=sheet.el.offsetHeight, peek=128, half=Math.min(h, innerHeight*0.48);
+  const h=sheet.el.offsetHeight, peek=document.getElementById("grab").offsetHeight+4, half=Math.min(h, innerHeight*0.5);
   return st==="full" ? 0 : st==="half" ? Math.max(0,h-half) : Math.max(0,h-peek);
 }
 function sheetTo(st){ sheet.state=st; const body=document.getElementById("sheetBody");
@@ -524,7 +534,7 @@ function sheetTo(st){ sheet.state=st; const body=document.getElementById("sheetB
 }
 (function(){
   const grab=document.getElementById("grab"); let y0=0, off0=0, cur=0, t0=0, drag=false;
-  const down=e=>{ if(isWide()) return; drag=true; y0=e.clientY; off0=sheetOffset(sheet.state); cur=off0; t0=Date.now(); sheet.el.classList.add("dragging"); grab.setPointerCapture&&grab.setPointerCapture(e.pointerId); };
+  const down=e=>{ if(isWide() || e.target.closest("#exBar")) return; drag=true; y0=e.clientY; off0=sheetOffset(sheet.state); cur=off0; t0=Date.now(); sheet.el.classList.add("dragging"); grab.setPointerCapture&&grab.setPointerCapture(e.pointerId); };
   const move=e=>{ if(!drag) return; cur=Math.max(0, Math.min(sheetOffset("peek"), off0+(e.clientY-y0))); sheet.el.style.transform=`translateY(${cur}px)`; };
   const up=e=>{ if(!drag) return; drag=false; sheet.el.classList.remove("dragging");
     const v=(cur-off0)/Math.max(1,Date.now()-t0);                   // 速さ（px/ms）
@@ -777,6 +787,7 @@ async function plateauAuto(silent){
       if(a){ codes.add(a.code); if(a.city) codes.add(a.city); names.push(a.cityName? a.cityName+a.name : a.name); }
     });
     if(!codes.size){
+      if(silent) setStatus("dataStatus","このルート周辺は PLATEAU のランドマーク等のデータがまだありません（自動確認済み）");
       if(!silent) P.done("このルート周辺は、PLATEAU のランドマーク・公園・駅のデータがまだ整備されていません。\n（観光スポットとカフェは「スポット」タブで全国どこでも探せます）");
       return 0;
     }
@@ -784,6 +795,7 @@ async function plateauAuto(silent){
     const {total,msgs}=await plateauFetch([...codes], label, P);
     P.set(100,"完了");
     if(!silent) P.done(total ? `${label} の PLATEAU データを ${total}件読み込みました\n`+msgs.join("\n") : `${label} には読み込めるデータがありませんでした。`);
+    if(silent) setStatus("dataStatus", total ? `${label}：${total}件を自動で読み込みました` : `${label}：読み込めるデータがありませんでした`);
     if(total && !silent) fitToData();
     return total;
   }catch(e){ if(!silent) P.done(`PLATEAU のサーバーに接続できませんでした（${e.message}）。少し待ってもう一度お試しください。`,true); return 0; }
@@ -937,6 +949,7 @@ async function searchPlace(){
   });
 }
 const bufEl=document.getElementById("buffer");
+bufEl.onchange=()=>scheduleExplore(800);
 bufEl.oninput=()=>{ state.buffer=+bufEl.value; document.getElementById("bufferVal").textContent=state.buffer+" m"; drawCorridor(); analyze(); };
 
 function parseRouteFile(text, name){
@@ -1050,6 +1063,7 @@ function analyze(){
     list.appendChild(li);
   });
   if(res.length && state.autoResult) showTab("result"); state.autoResult=false;
+  if(window.__tourReady) renderTour();
 }
 
 /* ========= 出力 ========= */
@@ -1206,7 +1220,7 @@ function stopRecording(){
   const len=routeLength(state.route);
   setStatus("routeStatus",`記録を停止しました（${(len/1000).toFixed(2)} km・約${fmtSteps(len)}歩・${fmtTime((Date.now()-gps.start)/1000)}）`);
   toast(`⏹ 記録を停止しました：${(len/1000).toFixed(2)} km・約${fmtSteps(len)}歩`,"ok",5000);
-  if(state.route.length>1) map.fitBounds(L.latLngBounds(state.route).pad(0.15));
+  if(state.route.length>1){ map.fitBounds(L.latLngBounds(state.route).pad(0.15)); scheduleExplore(500); }
 }
 recBtn.onclick=()=>{ state.recording ? stopRecording() : startRecording(false); };
 /* ========= 位置情報の設定ガイド ========= */
@@ -1442,6 +1456,8 @@ async function fetchPhotos(list, onProg){
 const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.private.coffee/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
 const T_CATS={
   sight:   {label:"観光名所",       emoji:"⭐", on:true},
+  landmark:{label:"ランドマーク",   emoji:"🏙", on:true},
+  station: {label:"駅",             emoji:"🚉", on:true},
   museum:  {label:"博物館・美術館", emoji:"🏛", on:true},
   view:    {label:"展望スポット",   emoji:"🌅", on:true},
   shrine:  {label:"神社",           emoji:"⛩", on:true},
@@ -1488,7 +1504,7 @@ function routeForQuery(){
   pts.forEach((p,i)=>{ if(cum[i]>=next || i===pts.length-1){ out.push(p); next=cum[i]+step; } });
   return out;
 }
-async function searchTourism(silent){
+async function searchTourism(silent, Pext){
   if(state.route.length<2){ if(!silent) tStatus("先に「② ルート」でルートを作ってください",true); return; }
   const R=Math.max(80, state.buffer);
   // ルートを囲む四角形（＋距離分の余白）で検索し、ルートからの距離は端末側で判定する（軽くて速い）
@@ -1502,7 +1518,7 @@ nwr["amenity"="place_of_worship"]["name"]${bb};
 nwr["leisure"~"^(park|garden)$"]["name"]${bb};
 nwr["amenity"="cafe"]["name"]${bb};
 );out center tags;`;
-  const P= silent ? (window.__vProg||{set(){},creep(){},stop(){},done(){}}) : progressUI("tStatus");
+  const P= Pext || (silent ? (window.__vProg||{set(){},creep(){},stop(){},done(){}}) : progressUI("tStatus"));
   const base= silent ? 0 : 0, span= silent ? 0 : 1;
   let j=null, errs=[], tries=0;
   for(const ep of OVERPASS){
@@ -1550,9 +1566,17 @@ nwr["amenity"="cafe"]["name"]${bb};
     : total ? `周辺に ${total}件ありましたが、ルートから ${R}m 以内にはありませんでした。「② ルート」で距離を広げてみてください。`
             : "この範囲には登録されたスポットがありませんでした。");
 }
+function plateauSpots(){
+  return (state.results||[]).filter(r=>r.f.name).map(r=>({name:r.f.name, ll:r.f.ll, cat:({landmark:"landmark",park:"park",station:"station"})[r.f.cat]||"sight",
+    score:2, d:r.d, along:r.along, src:"PLATEAU"}));
+}
+function mergeTour(){
+  const t=state.tour||[], seen=new Set(t.map(x=>x.name.replace(/\s/g,"")));
+  return t.concat(plateauSpots().filter(x=>!seen.has(x.name.replace(/\s/g,"")))).sort((a,b)=>a.along-b.along);
+}
 function renderTourChips(){
   const box=document.getElementById("tChips"); box.innerHTML="";
-  const n={}; (state.tour||[]).forEach(t=>n[t.cat]=(n[t.cat]||0)+1);
+  const n={}; mergeTour().forEach(t=>n[t.cat]=(n[t.cat]||0)+1);
   Object.entries(T_CATS).forEach(([k,c])=>{ if(!n[k]) return;
     const el=document.createElement("label"); el.className="chip";
     el.innerHTML=`<input type="checkbox" ${c.on?"checked":""}>${c.emoji} ${c.label}(${n[k]})`;
@@ -1565,12 +1589,13 @@ document.querySelectorAll("#tView button").forEach(b=>b.onclick=()=>{ state.tour
 function renderTour(){
   tourLayer.clearLayers(); renderTourChips();
   const ul=document.getElementById("tList"); ul.innerHTML="";
-  const all=state.tour||[], cafes=state.cafes||[], seg=document.getElementById("tView");
+  const all=mergeTour(), cafes=state.cafes||[], seg=document.getElementById("tView");
+  document.getElementById("tEmpty").style.display = (all.length||cafes.length) ? "none" : "block";
   seg.hidden=!(all.length||cafes.length);
   document.getElementById("tCntCafe").textContent=`(${cafes.length})`;
   document.getElementById("tCntAll").textContent=`(${all.length})`;
   document.getElementById("tCntPhoto").textContent=`(${all.filter(t=>t.photo).length})`;
-  if(all.length) document.getElementById("stCnt").textContent=all.length+"件";
+  if(all.length||cafes.length) document.getElementById("stCnt").textContent=(all.length+cafes.length)+"件";
   const gal = state.tourView==="photo", cafeV = state.tourView==="cafe";
   ul.classList.toggle("gallery", gal);
   document.getElementById("tChips").style.display = cafeV ? "none" : "";
@@ -1582,10 +1607,10 @@ function renderTour(){
     const m=L.marker(t.ll,{icon:L.divIcon({className:"",html:`<div class="tpin${t.cat==="cafe"?" cafe":""}">${c.emoji}</div>`,iconSize:[30,30],iconAnchor:[15,15]})})
       .bindPopup(`${t.photo?`<img src="${esc(t.photo)}" class="pphoto" alt="">`:""}<b>${esc(t.name)}</b><br>${c.emoji} ${c.label}<br>${t.desc?`<span class="pdesc">${esc(t.desc)}…</span><br>`:""}スタートから ${(t.along/1000).toFixed(2)}km（約${fmtSteps(t.along)}歩）／ルートから ${Math.round(t.d)}m`+(t.hours?`<br>🕒 ${esc(t.hours)}`:"")+(t.web?`<br><a href="${esc(t.web)}" target="_blank" rel="noopener">公式サイト</a>`:"")+
         (t.wikiUrl?`<br><a href="${t.wikiUrl}" target="_blank" rel="noopener">Wikipedia</a> ・ `:"<br>")+
-        `<a href="${t.osm}" target="_blank" rel="noopener">OSM</a> ・ <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.name)}" target="_blank" rel="noopener">Googleマップ</a> ・ <a href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(t.name)}" target="_blank" rel="noopener">写真を検索</a>`).addTo(tourLayer);
+        (t.osm?`<a href="${t.osm}" target="_blank" rel="noopener">OSM</a> ・ `:"")+`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.name)}" target="_blank" rel="noopener">Googleマップ</a> ・ <a href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(t.name)}" target="_blank" rel="noopener">写真を検索</a>`).addTo(tourLayer);
     const li=document.createElement("li");
     li.className="tli";
-    li.innerHTML=`${t.photo?`<img class="thumb" src="${esc(t.photo)}" loading="lazy" alt="">`:`<div class="thumb noimg${t.cat==="cafe"?" cafe":""}">${c.emoji}</div>`}<div><div class="sname">${esc(t.name)}${t.score>=4?' <span class="star">★</span>':''}</div>
+    li.innerHTML=`${t.photo?`<img class="thumb" src="${esc(t.photo)}" loading="lazy" alt="">`:`<div class="thumb noimg${t.cat==="cafe"?" cafe":""}">${c.emoji}</div>`}<div><div class="sname">${esc(t.name)}${t.score>=4?' <span class="star">★</span>':''}${t.src?'<span class="srcbadge">PLATEAU</span>':''}</div>
       <div class="smeta">${c.emoji} ${c.label}・${(t.along/1000).toFixed(2)}km地点（約${fmtSteps(t.along)}歩）・ルートから${Math.round(t.d)}m${t.hours?`<br>🕒 ${esc(t.hours)}`:""}</div>${t.desc?`<div class="sdesc">${esc(t.desc)}…</div>`:""}</div>`;
     if(gal){ li.className=""; li.innerHTML=`<img class="gimg" src="${esc(t.photo)}" loading="lazy" alt=""><div class="gb"><div class="sname">${esc(t.name)}${t.score>=4?' <span class="star">★</span>':''}</div>
       <div class="smeta">${c.emoji} ${(t.along/1000).toFixed(2)}km・約${fmtSteps(t.along)}歩</div></div>`; }
@@ -1593,12 +1618,50 @@ function renderTour(){
     ul.appendChild(li);
   });
 }
-document.getElementById("tBtn").onclick=async ()=>{ const b=document.getElementById("tBtn"); b.disabled=true;
-  if(document.getElementById("plWithSpots").checked && state.route.length>1 && state.plKey!==routeKey()){ state.plKey=routeKey(); plateauAuto(true).catch(()=>{}); }   // 裏で PLATEAU も取得
-  try{ await searchTourism(false); }catch(e){} finally{ b.disabled=false; } };
+/* ========= 自動探索：ルートが決まったら観光・カフェ・PLATEAU・写真をまとめて調べる ========= */
+let exTimer=null, exRunning=false, exQueued=false;
+const exBar=document.getElementById("exBar");
+function exBarProgress(){
+  exBar.hidden=false; exBar.className="exbar";
+  exBar.innerHTML='<div class="pg"><div class="pgbar"><i></i></div><b>0.00%</b></div><div class="pgl">沿線を調べています</div>';
+  const bar=exBar.querySelector("i"), pct=exBar.querySelector("b"), lab=exBar.querySelector(".pgl"); let cur=0, tm=null;
+  const set=(p,l)=>{ cur=Math.max(cur,Math.min(100,p)); bar.style.width=cur+"%"; pct.textContent=cur.toFixed(2)+"%"; if(l) lab.textContent="🔎 "+l; };
+  return { set, creep(a,b,l,tau=8){ clearInterval(tm); const t0=Date.now(); set(a,l); tm=setInterval(()=>set(a+(b-a)*(1-Math.exp(-(Date.now()-t0)/1000/tau))),100); },
+    stop(){ clearInterval(tm); }, done(msg,err){ clearInterval(tm); exBar.className="exbar "+(err?"err":"done"); exBar.textContent=msg; } };
+}
+const refit=()=>requestAnimationFrame(()=>sheetTo(sheet.state));
+new ResizeObserver(refit).observe(document.getElementById("grab"));
+function scheduleExplore(delay=2000){
+  if(state.recording || state.route.length<2) return;
+  if(routeKey()===state.exploreKey) return;
+  clearTimeout(exTimer);
+  exBar.hidden=false; exBar.className="exbar"; exBar.textContent="⏳ ルートが決まったら、沿線のスポットを自動で調べます…";
+  exTimer=setTimeout(()=>runExplore(false), delay);
+}
+async function runExplore(force){
+  if(state.recording || state.route.length<2) return;
+  const key=routeKey(); if(!force && key===state.exploreKey) return;
+  if(exRunning){ exQueued=true; return; }
+  exRunning=true; state.exploreKey=key;
+  const P=exBarProgress();
+  let pl=Promise.resolve(0);
+  if(document.getElementById("plWithSpots").checked && (force || state.plKey!==key)){ state.plKey=key; pl=plateauAuto(true).catch(()=>0); }
+  let ok=true; try{ await searchTourism(true,P); }catch(e){ ok=false; }
+  await pl; renderTour();
+  const nt=mergeTour().length, nc=(state.cafes||[]).length;
+  P.done(ok ? `✅ 観光 ${nt}件・カフェ ${nc}件が見つかりました（タップで一覧）` : "⚠️ 検索サービスが混んでいるようです。タップでもう一度調べます", !ok);
+  const bd=document.getElementById("tabBadge");
+  if(ok && document.querySelector(".tabs button.on").dataset.tab!=="result" && nt+nc){ bd.textContent=nt+nc; bd.hidden=false; }
+  exRunning=false;
+  if(exQueued){ exQueued=false; runExplore(false); }
+}
+exBar.onclick=()=>{ if(exBar.classList.contains("err")) runExplore(true); else showTab("result"); };
+document.querySelector('.tabs [data-tab="result"]').addEventListener("click",()=>document.getElementById("tabBadge").hidden=true);
+document.getElementById("tBtn").onclick=()=>runExplore(true);
+
 // ルートが変わったら古い結果を消す
 const _rc3 = routeChanged;
-routeChanged = function(fit){ _rc3(fit); if(!state.recording && state.tour && state.tourKey!==routeKey()){ state.tour=null; state.cafes=null; tourLayer.clearLayers(); document.getElementById("tList").innerHTML=""; document.getElementById("tChips").innerHTML=""; } };
+routeChanged = function(fit){ _rc3(fit); scheduleExplore(); if(!state.recording && state.tour && state.tourKey!==routeKey()){ state.tour=null; state.cafes=null; tourLayer.clearLayers(); document.getElementById("tList").innerHTML=""; document.getElementById("tChips").innerHTML=""; } };
 
 
 /* ========= 動画：歩くイメージ ========= */
@@ -1656,18 +1719,17 @@ async function vPrepare(){
   V.xy=pts.map(p=>V.toXY(p[0],p[1]));
   let sp=[];
   if(document.getElementById("vTour").checked){
-    if(!state.tour || state.tourKey!==routeKey()){
+    if(!state.tour || state.tourKey!==routeKey()){ clearTimeout(exTimer);
       let lab="観光スポットを検索中";
       window.__vProg={ set(p,l){ if(l) lab=l; vMsg(`${lab}… ${(+p).toFixed(2)}%`); }, creep(a,b,l,tau=8){ if(l) lab=l; clearInterval(this.t); const t0=Date.now(); this.t=setInterval(()=>this.set(a+(b-a)*(1-Math.exp(-(Date.now()-t0)/1000/tau))),100); }, stop(){ clearInterval(this.t); }, done(){ clearInterval(this.t); } };
       try{ await searchTourism(true); }catch(e){} window.__vProg.stop(); window.__vProg=null; }
     // 写真のあるもの・おすすめ度の高いものを優先して最大 V_MAX 件
-    const pick=(state.tour||[]).filter(t=>T_CATS[t.cat].on).slice().sort((a,b)=>(!!b.photo-!!a.photo)||(b.score-a.score)).slice(0,V_MAX);
+    const pick=mergeTour().filter(t=>T_CATS[t.cat].on).slice().sort((a,b)=>(!!b.photo-!!a.photo)||(b.score-a.score)).slice(0,V_MAX);
     sp = sp.concat(pick.map(t=>({name:t.name, emoji:T_CATS[t.cat].emoji, kind:T_CATS[t.cat].label, along:t.along, ll:t.ll, photo:t.photo, desc:t.desc})));
   }
   if(document.getElementById("vCafe").checked)
     sp = sp.concat((state.cafes||[]).slice().sort((a,b)=>a.d-b.d).slice(0,10).map(t=>({name:t.name, emoji:"☕", kind:"カフェ", along:t.along, ll:t.ll})));
-  if(document.getElementById("vSpots").checked)
-    sp = sp.concat(state.results.slice(0,20).map(r=>({name:r.f.name||CATS[r.f.cat].label, emoji:{landmark:"🏙",park:"🌳",station:"🚉",shelter:"🏫",other:"📍"}[r.f.cat], kind:"PLATEAU・"+CATS[r.f.cat].label, along:r.along, ll:r.f.ll})));
+  /* PLATEAU はスポット一覧に統合済み */
   V.spots = sp.sort((a,b)=>a.along-b.along).map(x=>Object.assign(x,{xy:V.toXY(x.ll[0],x.ll[1])}));
   // 写真の先読み（動画に使えるもの＝CORS 対応の画像のみ）
   const ph=V.spots.filter(x=>x.photo); let pd=0;
@@ -1866,6 +1928,8 @@ const _rc2 = routeChanged;
 routeChanged = function(fit){ _rc2(fit); renderGLinks(); };
 renderGLinks();
 
+window.__tourReady=true;
+if(state.route.length>1) setTimeout(()=>scheduleExplore(300),800);
 loadManifest();
 </script>
 </body>
