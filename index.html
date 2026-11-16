@@ -61,6 +61,8 @@
   .leaflet-popup-content td:first-child{color:#777;white-space:nowrap}
 
   .toast{position:absolute;z-index:1500;left:50%;bottom:calc(var(--navH) + 200px);transform:translate(-50%,10px);max-width:calc(100vw - 32px);width:max-content;padding:10px 16px;border-radius:14px;background:rgba(15,23,42,.92);color:#fff;font-size:13px;line-height:1.5;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
+  .toast.show{pointer-events:auto}
+  .toast u{cursor:pointer;font-weight:700}
   .toast.show{opacity:1;transform:translate(-50%,0)}
   .toast.warn{background:rgba(161,98,7,.95)} .toast.err{background:rgba(185,28,28,.95)} .toast.ok{background:rgba(21,128,61,.95)}
   .rechud{position:absolute;z-index:1001;left:12px;right:70px;top:calc(var(--topS) + 72px);padding:12px 14px;border-radius:18px;background:rgba(15,23,42,.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);color:#fff;box-shadow:var(--shadow)}
@@ -82,6 +84,28 @@
   .dbtns{display:flex;gap:8px;margin-top:16px}
   .dbtns .btn{flex:1}
   .dbtns .btn[hidden]{display:none}
+  .geoguide{position:fixed;inset:0;z-index:2500;background:rgba(2,6,23,.5);display:flex;align-items:flex-end;justify-content:center}
+  .geoguide[hidden]{display:none}
+  .gbox2{width:100%;max-width:480px;max-height:92dvh;overflow-y:auto;background:#f2f2f7;border-radius:24px 24px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));animation:up .28s cubic-bezier(.2,.8,.2,1)}
+  @keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+  .ghead{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
+  .gtitle{font-size:19px;font-weight:800}
+  .gstate{font-size:13px;color:var(--sub);margin-top:4px}
+  .gx{margin-left:auto;border:0;background:#e5e5ea;width:32px;height:32px;border-radius:50%;font-size:14px;cursor:pointer}
+  .gstep{background:#fff;border-radius:16px;padding:14px;margin:10px 0}
+  .gt{font-size:15px;font-weight:800}
+  .gd{font-size:13px;color:#3a3a3c;line-height:1.6;margin:4px 0 10px}
+  .ios{background:#f2f2f7;border-radius:12px;padding:4px 0;margin-bottom:6px}
+  .ios-row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:14px;position:relative}
+  .ios-row+.ios-row{border-top:1px solid #e5e5ea}
+  .ios-row.hl{background:#e8f0ff;border-radius:10px}
+  .ios-row.hl::after{content:"👆";position:absolute;right:-4px;bottom:-6px;font-size:18px}
+  .ios-ic{width:26px;height:26px;border-radius:7px;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;flex:0 0 26px}
+  .ios-lb{flex:1}
+  .ios-rt{color:#8e8e93;font-size:13px}
+  .ios-sw{display:inline-block;width:40px;height:24px;border-radius:12px;background:#34c759;position:relative}
+  .ios-sw::after{content:"";position:absolute;right:2px;top:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+  .gnote{font-size:12.5px;color:#92400e;background:#fef3c7;border-radius:10px;padding:8px 10px;margin-top:8px;line-height:1.6}
   /* ===== ボトムシート ===== */
   .sheet{position:absolute;z-index:1003;left:0;right:0;bottom:var(--navH);height:calc(100dvh - var(--navH) - var(--topS) - 70px);background:var(--panel);border-radius:22px 22px 0 0;box-shadow:0 -8px 30px rgba(15,23,42,.18);display:flex;flex-direction:column;transform:translateY(calc(100% - 128px));transition:transform .32s cubic-bezier(.2,.8,.2,1);will-change:transform}
   .sheet.dragging{transition:none}
@@ -220,6 +244,12 @@
   <div class="near" id="nearBox"></div>
   <div class="rechud" id="recHud" hidden></div>
   <div class="toast" id="toast"></div>
+  <div class="geoguide" id="geoGuide" hidden><div class="gbox2">
+    <div class="ghead"><div><div class="gtitle">📍 位置情報をオンにする</div><div class="gstate"></div></div><button class="gx" id="gClose">✕</button></div>
+    <div class="gsteps"></div>
+    <button class="btn primary wide" id="gRetry">もう一度位置情報を取得する</button>
+    <p class="hint" style="text-align:center;margin-bottom:0">設定を変えてこの画面に戻ると、自動で確認します</p>
+  </div></div>
   <div class="dlg" id="dlg" hidden><div class="dbox"><div class="dt"></div><div class="db"></div><div class="dbtns"><button class="btn dng">キャンセル</button><button class="btn primary dok">OK</button></div></div></div>
 
   <!-- 右：丸ボタン -->
@@ -276,6 +306,7 @@
       <div class="card">
         <h3>🛰 GPS で歩きながら記録</h3>
         <button class="btn wide" id="recBtn">⏺ 記録開始</button>
+        <button class="btn wide" id="geoHelpBtn" style="margin-top:8px;background:transparent;color:var(--accent)">📍 位置情報が取れないときは</button>
         <p class="hint" style="margin-bottom:0">歩いた道がそのままルートになり、近くのスポットを画面上部に表示します。</p>
       </div>
       <div class="card">
@@ -1009,7 +1040,7 @@ function startWatch(){
   gps.watch = navigator.geolocation.watchPosition(onPos, onGeoErr, {enableHighAccuracy:true, maximumAge:0, timeout:30000});
   toast("📡 現在地を取得しています…（はじめは数十秒かかることがあります）","info",0);
   clearTimeout(gps.waitTm);
-  gps.waitTm=setTimeout(()=>{ if(!gps.fixes) toast("📡 まだ位置が取れません。屋外の空が見える場所に移動するか、位置情報の設定を確認してください。","warn",0); },15000);
+  gps.waitTm=setTimeout(()=>{ if(!gps.fixes) toast("📡 まだ位置が取れません。屋外に移動するか、<u id=\"tGuide\">位置情報の設定を確認</u>してください。","warn",0); const tg=document.getElementById("tGuide"); if(tg) tg.onclick=()=>openGeoGuide(null); },15000);
   return true;
 }
 function stopWatch(){ if(gps.watch!=null){ navigator.geolocation.clearWatch(gps.watch); gps.watch=null; } }
@@ -1017,7 +1048,8 @@ function onGeoErr(e){
   if(e.code===1){
     stopWatch(); clearTimeout(gps.waitTm);
     if(state.recording){ state.recording=false; saveRec(); clearInterval(gps.timer); hud.hidden=true; recBtn.textContent="⏺ 記録開始"; recBtn.classList.remove("rec"); fabStop.style.display="none"; }
-    toast("⚠️ 位置情報が許可されていません","err",6000); ask("位置情報を許可してください", GEO_HELP, "閉じる", "");
+    const wasRec=gps.wantRec; toast("⚠️ 位置情報が許可されていません","err",5000);
+    openGeoGuide(()=>{ if(wasRec) startRecording(true); else startWatch(); });
   } else if(!gps.fixes || (gps.lastFix && Date.now()-gps.lastFix.t>15000)){
     // タイムアウト・一時的な取得失敗：監視は続いているので、案内だけ出す
     toast("📡 GPS の信号を待っています…（屋外の空が見える場所の方が早く取れます）","warn",6000);
@@ -1089,6 +1121,7 @@ async function startRecording(resume){
     if(!ok) return;
   }
   if(!startWatch()) return;
+  gps.wantRec=true;
   if(!resume){ state.wps=[]; renderWps(); state.route=[]; gps.start=Date.now(); routeChanged(false); }
   gps.last= state.route.length ? state.route[state.route.length-1] : null; gps.lastTime=Date.now();
   state.recording=true; saveRec();
@@ -1099,7 +1132,7 @@ async function startRecording(resume){
   if(gps.lastFix) map.setView(gps.lastFix.ll, Math.max(map.getZoom(),17));
 }
 function stopRecording(){
-  state.recording=false; saveRec(); clearInterval(gps.timer); hud.hidden=true;
+  gps.wantRec=false; state.recording=false; saveRec(); clearInterval(gps.timer); hud.hidden=true;
   recBtn.textContent="⏺ 記録開始"; recBtn.classList.remove("rec"); fabStop.style.display="none"; analyze();
   try{ gps.lock && gps.lock.release(); }catch(e){} gps.lock=null;
   const len=routeLength(state.route);
@@ -1108,6 +1141,64 @@ function stopRecording(){
   if(state.route.length>1) map.fitBounds(L.latLngBounds(state.route).pad(0.15));
 }
 recBtn.onclick=()=>{ state.recording ? stopRecording() : startRecording(false); };
+/* ========= 位置情報の設定ガイド ========= */
+const UA=navigator.userAgent, IS_IOS=/iPhone|iPad|iPod/.test(UA)||(/Macintosh/.test(UA)&&navigator.maxTouchPoints>1), IS_ANDROID=/Android/.test(UA);
+const IS_STANDALONE=matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+async function geoPermState(){ try{ if(navigator.permissions){ const p=await navigator.permissions.query({name:"geolocation"}); return p; } }catch(e){} return null; }
+function iosRow(icon,bg,label,right,hl){ return `<div class="ios-row${hl?" hl":""}"><span class="ios-ic" style="background:${bg}">${icon}</span><span class="ios-lb">${label}</span><span class="ios-rt">${right||"›"}</span></div>`; }
+const SW_ON='<span class="ios-sw on"></span>';
+function guideSteps(){
+  if(IS_ANDROID) return [
+    {t:"① 端末の位置情報をオン", d:"画面上から下にスワイプ → クイック設定の「位置情報」をオン", ui:iosRow("📍","#34c759","位置情報",SW_ON,1)},
+    {t:"② Chrome に位置情報を許可", d:"アドレスバー左の「⚙/🔒」マーク → 「権限」→「位置情報」を「許可」", ui:iosRow("🔒","#8e8e93","権限")+iosRow("📍","#34c759","位置情報","許可",1)},
+  ];
+  return [
+    {t:"① 位置情報サービスをオン", d:"設定 → プライバシーとセキュリティ → 位置情報サービス", ui:
+      iosRow("✋","#3478f6","プライバシーとセキュリティ")+iosRow("➤","#3478f6","位置情報サービス",SW_ON,1), settings:true},
+    {t:"② Safari に許可", d:"同じ画面を下にスクロール →「Safari Webサイト」→「このAppの使用中のみ許可」を選び、「正確な位置情報」もオン", ui:
+      iosRow("🧭","#3478f6","Safari Webサイト","使用中 ›",1)+iosRow("◎","#8e8e93","正確な位置情報",SW_ON,1)},
+    {t:"③ このサイトに許可", d:IS_STANDALONE?"ホーム画面のアプリとして開いている場合は、①②のあとにアプリを閉じて開き直してください。":"Safari に戻り、アドレスバー左の「ぁあ」→「Webサイトの設定」→「位置情報」を「許可」", ui:
+      iosRow("ぁあ","#8e8e93","Webサイトの設定")+iosRow("➤","#3478f6","位置情報","許可 ›",1)},
+  ];
+}
+let guideRetry=null;
+async function openGeoGuide(retry){
+  guideRetry=retry||null;
+  const g=document.getElementById("geoGuide");
+  const st=await geoPermState();
+  const stLabel = !st ? ["確認できません","#94a3b8"] : st.state==="granted" ? ["許可済み","#22c55e"] : st.state==="denied" ? ["許可されていません","#ef4444"] : ["まだ聞かれていません","#eab308"];
+  g.querySelector(".gstate").innerHTML=`このサイトの位置情報：<b style="color:${stLabel[1]}">● ${stLabel[0]}</b>`;
+  g.querySelector(".gsteps").innerHTML=guideSteps().map(s=>`<div class="gstep"><div class="gt">${s.t}</div><div class="gd">${s.d}</div><div class="ios">${s.ui}</div>
+    ${s.settings&&IS_IOS?`<button class="btn wide gopen">⚙️ 設定アプリを開く</button><div class="gnote" hidden></div>`:""}</div>`).join("");
+  const ob=g.querySelector(".gopen");
+  if(ob) ob.onclick=()=>{
+    const note=g.querySelector(".gnote"); let left=false;
+    const onHide=()=>{ left=true; }; document.addEventListener("visibilitychange",onHide,{once:true});
+    try{ location.href="App-prefs:Privacy&path=LOCATION"; }catch(e){}
+    setTimeout(()=>{ if(!left && document.visibilityState==="visible"){ note.hidden=false;
+      note.innerHTML="設定アプリを自動で開けませんでした。ホーム画面の <b>⚙️ 設定</b> アプリを開いて、上の手順で進めてください。"; } },1500);
+  };
+  g.hidden=false;
+  if(st) st.onchange=()=>{ if(st.state==="granted" && !g.hidden){ g.hidden=true; toast("✅ 位置情報が許可されました","ok"); guideRetry&&guideRetry(); } };
+}
+document.getElementById("gClose").onclick=()=>document.getElementById("geoGuide").hidden=true;
+document.getElementById("gRetry").onclick=()=>{
+  const b=document.getElementById("gRetry"); b.disabled=true; b.textContent="確認中…";
+  navigator.geolocation.getCurrentPosition(()=>{ b.disabled=false; b.textContent="もう一度位置情報を取得する";
+      document.getElementById("geoGuide").hidden=true; toast("✅ 位置情報を取得できました","ok"); guideRetry&&guideRetry(); },
+    e=>{ b.disabled=false; b.textContent="もう一度位置情報を取得する";
+      toast(e.code===1?"⚠️ まだ許可されていません。上の手順を確認してください":"📡 位置を取得できませんでした（屋外の方が取れやすくなります）","warn",5000); },
+    {enableHighAccuracy:true, timeout:20000, maximumAge:0});
+};
+// 設定アプリから戻ってきたら自動で確認
+document.addEventListener("visibilitychange",async ()=>{
+  const g=document.getElementById("geoGuide");
+  if(document.visibilityState!=="visible" || g.hidden) return;
+  const st=await geoPermState();
+  if(!st || st.state!=="denied") document.getElementById("gRetry").click();
+});
+document.getElementById("geoHelpBtn").onclick=()=>openGeoGuide(null);
+
 fabStop.onclick=()=>stopRecording();
 
 // ルートを端末内に保存・復元
