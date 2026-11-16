@@ -345,7 +345,7 @@
     <!-- 動画 -->
     <section class="pane" id="pane-video">
       <div class="ptitle">動画</div>
-      <p class="psub">光る ◯ がルートを歩き、青い軌跡を描くアニメーションを作ります</p>
+      <p class="psub">光る ◯ がルートを歩き、青い軌跡を描くアニメーションを作ります。3D では地形の起伏と建物が立体で見えます</p>
       <div class="card">
         <label>タイトル</label>
         <input type="text" id="vTitle" value="あるく行路" maxlength="30">
@@ -357,7 +357,9 @@
           <div><label>背景地図</label>
             <select id="vBase"><option value="night">ナイト（濃紺）</option><option value="seamlessphoto">航空写真</option><option value="voyager">モダン</option><option value="dark">ダーク</option><option value="pale">淡色地図</option><option value="std">標準地図</option></select></div>
         </div>
-        <label class="toggle">観光スポットを順に表示<input type="checkbox" id="vTour" checked></label>
+        <label class="toggle">🏔 3D（地形の起伏と建物を立体表示）<input type="checkbox" id="v3d" checked></label>
+        <label class="toggle" style="padding-top:0">⛰ 高低差グラフを表示<input type="checkbox" id="vElev" checked></label>
+        <label class="toggle" style="padding-top:0">観光スポットを順に表示<input type="checkbox" id="vTour" checked></label>
         <label class="toggle" style="padding-top:0">カフェも表示（ルートに近い10件）<input type="checkbox" id="vCafe"></label>
       </div>
       <button class="btn primary wide" id="vOpen">🎬 プレビューを開く</button>
@@ -1680,6 +1682,181 @@ const _rc3 = routeChanged;
 routeChanged = function(fit){ _rc3(fit); scheduleExplore(); if(!state.recording && state.tour && state.tourKey!==routeKey()){ state.tour=null; state.cafes=null; tourLayer.clearLayers(); document.getElementById("tList").innerHTML=""; document.getElementById("tChips").innerHTML=""; } };
 
 
+/* ========= 標高（国土地理院 標高タイル dem_png）========= */
+// 標高 = (R×65536 + G×256 + B) × 0.01 m（2^23 以上は負の値、(128,0,0) は無効値）
+const demCache=new Map();
+function demTile(z,x,y){
+  const k=`${z}/${x}/${y}`; if(demCache.has(k)) return demCache.get(k);
+  const p=loadImg(`https://cyberjapandata.gsi.go.jp/xyz/dem_png/${z}/${x}/${y}.png`).then(im=>{
+    if(!im) return null; const c=document.createElement("canvas"); c.width=c.height=256; const g=c.getContext("2d"); g.drawImage(im,0,0);
+    try{ return g.getImageData(0,0,256,256).data; }catch(e){ return null; } });
+  demCache.set(k,p); return p;
+}
+function decodeGsi(r,g,b){ if(r===128&&g===0&&b===0) return null; const x=r*65536+g*256+b; return (x<8388608 ? x : x-16777216)*0.01; }
+async function elevProfile(pts, onProg){
+  const cum=cumDist(pts), L=cum[cum.length-1], n=Math.max(2,Math.min(240,Math.ceil(L/15)));
+  const z=14, s=256*2**z, out=[];
+  for(let i=0;i<n;i++){
+    const d=L*i/(n-1), {ll}=pointAt(pts,cum,d), sin=Math.sin(toRad(ll[0]));
+    const px=(ll[1]+180)/360*s, py=(0.5-Math.log((1+sin)/(1-sin))/(4*Math.PI))*s;
+    const tx=Math.floor(px/256), ty=Math.floor(py/256), data=await demTile(z,tx,ty);
+    let e=null; if(data){ const ix=Math.min(255,Math.floor(px-tx*256)), iy=Math.min(255,Math.floor(py-ty*256)), o=(iy*256+ix)*4; e=decodeGsi(data[o],data[o+1],data[o+2]); }
+    out.push({d,e}); onProg&&onProg((i+1)/n);
+  }
+  // 欠損を前後で補間
+  let last=null; out.forEach(p=>{ if(p.e==null) p.e=last; else last=p.e; });
+  last=null; for(let i=out.length-1;i>=0;i--){ if(out[i].e==null) out[i].e=last; else last=out[i].e; }
+  if(out.every(p=>p.e==null)) return null;
+  // 上った高さ（2m未満の細かい上下はノイズとして無視）
+  let up=0, down=0, ref=out[0].e;
+  out.forEach(p=>{ const dd=p.e-ref; if(dd>=2){ up+=dd; ref=p.e; } else if(dd<=-2){ down-=dd; ref=p.e; } });
+  const es=out.map(p=>p.e);
+  return {pts:out, min:Math.min(...es), max:Math.max(...es), up, down, L};
+}
+function elevAt(pr,d){ const p=pr.pts, i=Math.min(p.length-1,Math.max(0,Math.round(d/pr.L*(p.length-1)))); return p[i].e; }
+function drawElev(g,prog,u,FONT){
+  const pr=V.elev; if(!pr) return;
+  const w=(V.W>V.H?300:270)*u, h=86*u, x=V.W-w-24*u, y=V.top*0.18;
+  roundRect(g,x,y,w,h,14*u); g.fillStyle="rgba(2,6,23,.62)"; g.fill();
+  const cx=x+12*u, cw=w-24*u, cy=y+30*u, ch=h-40*u;
+  const span=Math.max(10,pr.max-pr.min), yOf=e=>cy+ch-(e-pr.min)/span*ch, xOf=d=>cx+d/pr.L*cw;
+  // 全体（薄く）
+  g.beginPath(); pr.pts.forEach((p,i)=>i?g.lineTo(xOf(p.d),yOf(p.e)):g.moveTo(xOf(p.d),yOf(p.e)));
+  g.strokeStyle="rgba(148,163,184,.55)"; g.lineWidth=1.5*u; g.stroke();
+  // 歩いた分（塗り）
+  const dNow=pr.L*prog; const done=pr.pts.filter(p=>p.d<=dNow);
+  if(done.length>1){
+    g.beginPath(); g.moveTo(xOf(0),cy+ch); done.forEach(p=>g.lineTo(xOf(p.d),yOf(p.e))); g.lineTo(xOf(done[done.length-1].d),cy+ch); g.closePath();
+    const gr=g.createLinearGradient(0,cy,0,cy+ch); gr.addColorStop(0,"rgba(56,189,248,.65)"); gr.addColorStop(1,"rgba(37,99,235,.08)"); g.fillStyle=gr; g.fill();
+    g.beginPath(); done.forEach((p,i)=>i?g.lineTo(xOf(p.d),yOf(p.e)):g.moveTo(xOf(p.d),yOf(p.e))); g.strokeStyle="#7dd3fc"; g.lineWidth=2.2*u; g.stroke();
+  }
+  const eNow=elevAt(pr,dNow);
+  g.beginPath(); g.arc(xOf(dNow),yOf(eNow),4.5*u,0,7); g.fillStyle="#fff"; g.fill();
+  // 上った高さ（ここまで）
+  let up=0, ref=pr.pts[0].e; for(const p of done){ const dd=p.e-ref; if(dd>=2){ up+=dd; ref=p.e; } else if(dd<=-2) ref=p.e; }
+  g.textBaseline="alphabetic"; g.textAlign="left"; g.fillStyle="#e0f2fe"; g.font=`800 ${17*u}px ${FONT}`;
+  g.fillText(`⛰ 標高 ${Math.round(eNow)}m`, x+12*u, y+22*u);
+  g.textAlign="right"; g.fillStyle="#7dd3fc"; g.font=`700 ${13*u}px ${FONT}`;
+  g.fillText(`↑ ${Math.round(up)}m / ${Math.round(pr.up)}m`, x+w-12*u, y+21*u);
+}
+
+/* ========= 3D（MapLibre GL：地形＝国土地理院 標高タイル／建物＝OpenFreeMap） ========= */
+let ML=null;
+function loadMapLibre(){
+  if(ML) return ML;
+  ML=new Promise((res,rej)=>{ const s=document.createElement("script"); s.src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js";
+    s.onload=()=>{ try{ setupGsiProtocol(); res(window.maplibregl); }catch(e){ rej(e); } }; s.onerror=()=>rej(new Error("3D表示の部品を読み込めませんでした")); document.head.appendChild(s);
+  }).catch(e=>{ ML=null; throw e; });
+  return ML;
+}
+// 地理院の標高タイルを、MapLibre が読める Terrain-RGB 形式に変換して渡す
+function setupGsiProtocol(){
+  maplibregl.addProtocol("gsidem", async (params, ac)=>{
+    const url=params.url.replace("gsidem://","https://");
+    const c=document.createElement("canvas"); c.width=c.height=256; const g=c.getContext("2d");
+    const img=g.createImageData(256,256), o=img.data;
+    let src=null;
+    try{ const r=await fetch(url,{signal:ac.signal}); if(r.ok){ const bmp=await createImageBitmap(await r.blob()); g.drawImage(bmp,0,0); src=g.getImageData(0,0,256,256).data; } }catch(e){ if(e.name==="AbortError") throw e; }
+    for(let i=0;i<o.length;i+=4){
+      const h= src ? (decodeGsi(src[i],src[i+1],src[i+2]) ?? 0) : 0;      // 海などデータなしは 0m
+      const v=Math.max(0,Math.round((h+10000)*10));
+      o[i]=(v>>16)&255; o[i+1]=(v>>8)&255; o[i+2]=v&255; o[i+3]=255;
+    }
+    g.putImageData(img,0,0);
+    const blob=await new Promise(r=>c.toBlob(r,"image/png"));
+    return {data: await blob.arrayBuffer()};
+  });
+}
+function style3d(kind){
+  const photo = kind==="photo";
+  const roads = photo ? [] : [
+    {id:"road-minor",type:"line",source:"omt","source-layer":"transportation",filter:["in",["get","class"],["literal",["minor","service","path","track"]]],
+      paint:{"line-color":"#1c3766","line-width":["interpolate",["linear"],["zoom"],14,0.6,18,4]}},
+    {id:"road-major",type:"line",source:"omt","source-layer":"transportation",filter:["in",["get","class"],["literal",["motorway","trunk","primary","secondary","tertiary"]]],
+      paint:{"line-color":"#2f5aa0","line-width":["interpolate",["linear"],["zoom"],12,1,18,9]}},
+    {id:"rail",type:"line",source:"omt","source-layer":"transportation",filter:["==",["get","class"],"rail"],paint:{"line-color":"#4b6fae","line-width":1.4,"line-dasharray":[3,2]}},
+  ];
+  return {version:8,
+    sources:{
+      omt:{type:"vector",url:"https://tiles.openfreemap.org/planet"},
+      dem:{type:"raster-dem",tiles:["gsidem://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png"],tileSize:256,maxzoom:14,encoding:"mapbox"},
+      hs:{type:"raster-dem",tiles:["gsidem://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png"],tileSize:256,maxzoom:14,encoding:"mapbox"},
+      ...(photo?{ph:{type:"raster",tiles:["https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"],tileSize:256,maxzoom:18}}:{}),
+      route:{type:"geojson",lineMetrics:true,data:{type:"Feature",geometry:{type:"LineString",coordinates:[]}}},
+    },
+    layers:[
+      {id:"bg",type:"background",paint:{"background-color": photo ? "#0b1220" : "#071226"}},
+      ...(photo?[{id:"ph",type:"raster",source:"ph",paint:{"raster-brightness-max":0.85,"raster-saturation":-0.15}}]:[
+        {id:"park",type:"fill",source:"omt","source-layer":"park",paint:{"fill-color":"#0c2a3a"}},
+        {id:"lc",type:"fill",source:"omt","source-layer":"landcover",paint:{"fill-color":"#0b2236","fill-opacity":0.8}},
+        {id:"water",type:"fill",source:"omt","source-layer":"water",paint:{"fill-color":"#0a2a55"}},
+      ]),
+      {id:"hill",type:"hillshade",source:"hs",paint:{"hillshade-shadow-color":"#020617","hillshade-highlight-color": photo?"#ffffff":"#4a6fb0","hillshade-exaggeration": photo?0.25:0.55,"hillshade-accent-color":"#0b1220"}},
+      ...roads,
+      {id:"bld",type:"fill-extrusion",source:"omt","source-layer":"building",minzoom:13,
+        paint:{"fill-extrusion-color": photo ? "#e2e8f0" : ["interpolate",["linear"],["coalesce",["get","render_height"],8],0,"#1e3a8a",40,"#2563eb",120,"#60a5fa"],
+          "fill-extrusion-height":["coalesce",["get","render_height"],8],"fill-extrusion-base":["coalesce",["get","render_min_height"],0],
+          "fill-extrusion-opacity": photo?0.55:0.88,"fill-extrusion-vertical-gradient":true}},
+      {id:"route",type:"line",source:"route",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#bae6fd","line-width":3,"line-opacity":0.75,"line-dasharray":[0.5,2.5]}},
+      {id:"trail-glow",type:"line",source:"route",layout:{"line-cap":"round","line-join":"round"},paint:{"line-width":20,"line-blur":12,"line-gradient":trailGrad(0,"#38bdf8","#6366f1",0.8)}},
+      {id:"trail",type:"line",source:"route",layout:{"line-cap":"round","line-join":"round"},paint:{"line-width":7,"line-gradient":trailGrad(0,"#67e8f9","#4f46e5",1)}},
+      {id:"trail-core",type:"line",source:"route",layout:{"line-cap":"round","line-join":"round"},paint:{"line-width":2.2,"line-gradient":trailGrad(0,"#ffffff","#e0f2fe",0.85)}},
+    ]};
+}
+// 歩いた所まで（line-progress ≦ p）だけ色を付け、その先は透明にする
+function trailGrad(p,c0,c1,a){
+  p=Math.max(0.0001,Math.min(0.9998,p));
+  const rgba=(hex,al)=>{ const n=parseInt(hex.slice(1),16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${al})`; };
+  return ["interpolate",["linear"],["line-progress"], 0,rgba(c0,a), p,rgba(c1,a), p+0.0001,rgba(c1,0), 1,rgba(c1,0)];
+}
+const bearingTo=(a,b)=>{ const y=Math.sin(toRad(b[1]-a[1]))*Math.cos(toRad(b[0])), x=Math.cos(toRad(a[0]))*Math.sin(toRad(b[0]))-Math.sin(toRad(a[0]))*Math.cos(toRad(b[0]))*Math.cos(toRad(b[1]-a[1])); return (Math.atan2(y,x)*180/Math.PI+360)%360; };
+const angLerp=(a,b,t)=>{ let d=((b-a+540)%360)-180; return (a+d*t+360)%360; };
+async function prepare3d(W,H,kind){
+  const ml=await loadMapLibre();
+  if(V.map){ V.map.remove(); V.map=null; }
+  let box=document.getElementById("gl3d");
+  if(!box){ box=document.createElement("div"); box.id="gl3d"; document.body.appendChild(box); }
+  box.style.cssText=`position:fixed;left:-${W+50}px;top:0;width:${W}px;height:${H}px;pointer-events:none`;
+  const map=new ml.Map({container:box, style:style3d(kind), interactive:false, attributionControl:false, pixelRatio:1,
+    preserveDrawingBuffer:true, fadeDuration:0, maxPitch:75, center:[state.route[0][1],state.route[0][0]], zoom:15});
+  await new Promise((res,rej)=>{ const t=setTimeout(()=>rej(new Error("3D地図の準備がタイムアウトしました")),20000); map.once("load",()=>{ clearTimeout(t); res(); }); map.on("error",e=>{ /* タイル単位のエラーは無視 */ }); });
+  map.setTerrain({source:"dem", exaggeration:1.6});
+  try{ map.setSky({"sky-color":"#0b1d4a","horizon-color":"#1e40af","fog-color":"#0b1220","sky-horizon-blend":0.6,"horizon-fog-blend":0.6,"fog-ground-blend":0.4}); }catch(e){}
+  map.getSource("route").setData({type:"Feature",geometry:{type:"LineString",coordinates:state.route.map(p=>[p[1],p[0]])}});
+  V.map=map; V.glCanvas=map.getCanvas();
+  V.proj=ll=>{ const p=map.project([ll[1],ll[0]]); return [p.x,p.y]; };
+  // 終わりの全体表示カメラ
+  const b=new ml.LngLatBounds(); state.route.forEach(p=>b.extend([p[1],p[0]]));
+  const cam=map.cameraForBounds(b,{padding:{top:H*0.2,bottom:H*0.22,left:W*0.1,right:W*0.1}})||{center:b.getCenter(),zoom:14};
+  V.over={center:[cam.center.lng??cam.center[0], cam.center.lat??cam.center[1]], zoom:Math.min(16,(cam.zoom||14)-0.3)};
+  V.camB=null;
+  // 先読み：ルート上の何か所かにカメラを置いて、地図を読み込んでおく
+  const n=8;
+  for(let i=0;i<=n;i++){
+    camAt(i/n, i===n?1:0, true);
+    await Promise.race([new Promise(r=>map.once("idle",r)), new Promise(r=>setTimeout(r,4000))]);
+    vMsg(`3D地図を読み込み中… ${((i+1)/(n+1)*100).toFixed(2)}%`);
+  }
+  V.camB=null;
+}
+// prog：0〜1（歩いた割合）、tail：0〜1（ゴール後に全体を見せる割合）
+function camAt(prog, tail, snap){
+  const map=V.map, d=V.L*prog, here=pointAt(state.route,V.cum,d).ll, ahead=pointAt(state.route,V.cum,Math.min(V.L,d+120)).ll, back=pointAt(state.route,V.cum,Math.max(0,d-40)).ll;
+  const want= d+5>=V.L ? (V.camB??bearingTo(back,here)) : bearingTo(here,ahead);
+  V.camB = (V.camB==null||snap) ? want : angLerp(V.camB,want,0.06);
+  const k=Math.max(0,Math.min(1,tail)), e=k*k*(3-2*k);
+  const c=[here[1]+(V.over.center[0]-here[1])*e, here[0]+(V.over.center[1]-here[0])*e];
+  map.jumpTo({center:c, zoom:16.3+(V.over.zoom-16.3)*e, pitch:62-14*e, bearing:V.camB});
+}
+function draw3dBase(prog){
+  const m=V.map;
+  m.setPaintProperty("trail-glow","line-gradient",trailGrad(prog,"#38bdf8","#6366f1",0.8));
+  m.setPaintProperty("trail","line-gradient",trailGrad(prog,"#67e8f9","#4f46e5",1));
+  m.setPaintProperty("trail-core","line-gradient",trailGrad(prog,"#ffffff","#e0f2fe",0.85));
+  camAt(prog, V.tailF||0);
+  V.map.redraw();
+}
+
 /* ========= 動画：歩くイメージ ========= */
 const V={ canvas:document.getElementById("vCanvas"), bg:null, playing:false, anim:0, blob:null, ext:"", kind:"" };
 const vMsg=t=>document.getElementById("vMsg").textContent=t;
@@ -1702,6 +1879,16 @@ async function vPrepare(){
   const cpx=[(a[0]+b[0])/2,(a[1]+b[1])/2], cx=box.x+box.w/2, cy=box.y+box.h/2;
   V.toXY=(lat,lng)=>{ const p=mercPx(lat,lng,z); return [(p[0]-cpx[0])*scale+cx, (p[1]-cpx[1])*scale+cy]; };
   V.W=W; V.H=H; V.top=top; V.bottom=bottom;
+  V.cum=cumDist(pts); V.L=V.cum[V.cum.length-1]; V.tailF=0;
+  V.showElev=document.getElementById("vElev").checked;
+  V.elev=null;
+  if(V.showElev){ vMsg("高低差を計算中… 0.00%"); try{ V.elev=await elevProfile(pts,f=>vMsg(`高低差を計算中… ${(f*100).toFixed(2)}%`)); }catch(e){ V.elev=null; } }
+  V.is3d=false;
+  if(document.getElementById("v3d").checked){
+    try{ vMsg("3D地図を準備中…"); await prepare3d(W,H, document.getElementById("vBase").value==="seamlessphoto"?"photo":"night"); V.is3d=true; V.night=true; }
+    catch(e){ V.is3d=false; vMsg("3D表示ができなかったため、平面で表示します（"+(e.message||e)+"）"); await new Promise(r=>setTimeout(r,1500)); }
+  }
+  if(!V.is3d){
   // 背景タイル
   const sel=document.getElementById("vBase").value, night= sel==="night", base= night ? "pale" : sel, ext = base==="seamlessphoto" ? "jpg" : "png";
   V.night = night || sel==="seamlessphoto" || sel==="dark";
@@ -1731,7 +1918,7 @@ async function vPrepare(){
   const vg=g.createRadialGradient(W/2,H/2,Math.min(W,H)*0.35,W/2,H/2,Math.max(W,H)*0.75);
   vg.addColorStop(0,"rgba(2,6,23,0)"); vg.addColorStop(1, night ? "rgba(2,6,23,.55)" : "rgba(2,6,23,.25)"); g.fillStyle=vg; g.fillRect(0,0,W,H);
   V.bg=bg;
-  V.cum=cumDist(pts); V.L=V.cum[V.cum.length-1];
+  }
   V.xy=pts.map(p=>V.toXY(p[0],p[1]));
   let sp=[];
   if(document.getElementById("vTour").checked){
@@ -1761,14 +1948,19 @@ function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x
 function vFrame(prog, tSec){
   const c=V.canvas, g=c.getContext("2d"), W=V.W, H=V.H, u=Math.min(W,H)/720, night=V.night;
   const FONT='"Hiragino Sans","Noto Sans JP",sans-serif';
-  g.save(); g.drawImage(V.bg,0,0);
+  g.save();
+  if(V.is3d){ draw3dBase(prog); g.drawImage(V.glCanvas,0,0,W,H);
+    const vg=g.createRadialGradient(W/2,H/2,Math.min(W,H)*0.4,W/2,H/2,Math.max(W,H)*0.75); vg.addColorStop(0,"rgba(2,6,23,0)"); vg.addColorStop(1,"rgba(2,6,23,.45)"); g.fillStyle=vg; g.fillRect(0,0,W,H); }
+  else g.drawImage(V.bg,0,0);
   g.lineCap="round"; g.lineJoin="round";
+  const d=V.L*prog, at=pointAt(state.route,V.cum,d), head= V.is3d ? V.proj(at.ll) : V.toXY(at.ll[0],at.ll[1]);
+  const trail= V.is3d ? [] : V.xy.slice(0,at.i+1).concat([head]);
+  if(!V.is3d){
   // これから歩く道（細い点線）
   g.beginPath(); V.xy.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));
   g.setLineDash([1*u,9*u]); g.strokeStyle= night ? "rgba(186,230,253,.55)" : "rgba(30,64,175,.55)"; g.lineWidth=4*u; g.stroke(); g.setLineDash([]);
-  // 歩いた軌跡：発光 → グラデーション → 白い芯
-  const d=V.L*prog, at=pointAt(state.route,V.cum,d), head=V.toXY(at.ll[0],at.ll[1]);
-  const trail=V.xy.slice(0,at.i+1).concat([head]);
+  }
+  // 歩いた軌跡：発光 → グラデーション → 白い芯（3D は地図側で描画）
   const path=()=>{ g.beginPath(); trail.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1])); };
   if(trail.length>1){
     path(); g.shadowColor= night ? "rgba(56,189,248,.95)" : "rgba(37,99,235,.6)"; g.shadowBlur=24*u;
@@ -1786,7 +1978,7 @@ function vFrame(prog, tSec){
     path(); g.strokeStyle="rgba(255,255,255,.75)"; g.lineWidth=2.2*u; g.stroke();
   }
   // スタート・ゴール
-  const s0=V.xy[0], e0=V.xy[V.xy.length-1];
+  const s0= V.is3d ? V.proj(state.route[0]) : V.xy[0], e0= V.is3d ? V.proj(state.route[state.route.length-1]) : V.xy[V.xy.length-1];
   const ring=(p,col,label)=>{ g.beginPath(); g.arc(p[0],p[1],13*u,0,7); g.fillStyle=col; g.fill(); g.lineWidth=3*u; g.strokeStyle="#fff"; g.stroke();
     g.fillStyle="#fff"; g.font=`800 ${12*u}px ${FONT}`; g.textAlign="center"; g.textBaseline="middle"; g.fillText(label,p[0],p[1]+u); };
   ring(s0,"#0ea5e9","S"); ring(e0, prog>=1 ? "#4f46e5" : "rgba(30,58,138,.85)","G");
@@ -1794,6 +1986,7 @@ function vFrame(prog, tSec){
   let latest=null, shown=0;
   V.spots.forEach(sp=>{
     if(sp.along>d) return; shown++; latest=sp;
+    if(V.is3d){ sp.xy=V.proj(sp.ll); if(sp.xy[0]<-40||sp.xy[0]>W+40||sp.xy[1]<V.top*0.6||sp.xy[1]>H+40) return; }
     const age=Math.min(1,(d-sp.along)/(V.L*0.035+1));
     const pop = age<0.6 ? 1+0.35*Math.sin(age/0.6*Math.PI) : 1;      // ぽんっと出る
     const r=(sp.img?19:15)*u*Math.min(1,age*4)*pop;
@@ -1873,16 +2066,17 @@ function vFrame(prog, tSec){
     }
     g.globalAlpha=1;
   }
+  if(V.showElev) drawElev(g,prog,u,FONT);
   g.textBaseline="alphabetic"; g.font=`400 ${10.5*u}px sans-serif`; g.fillStyle="rgba(255,255,255,.6)"; g.textAlign="right";
-  g.fillText((isCartoV()?"地図：© OpenStreetMap © CARTO":"地図：国土地理院")+" / スポット：© OpenStreetMap contributors / 写真：Wikimedia Commons / PLATEAU", W-12*u, H-8*u);
+  g.fillText((V.is3d?"地図：OpenFreeMap © OpenMapTiles Data from OpenStreetMap / 標高：国土地理院":isCartoV()?"地図：© OpenStreetMap © CARTO":"地図：国土地理院")+" / スポット：© OpenStreetMap / 写真：Wikimedia Commons / PLATEAU", W-12*u, H-8*u, W-24*u);
   g.restore();
 }
 function vAnimate(onEnd){
-  const lead=0.6, tail=1.5, T=V.dur; let t0=null; const id=++V.anim; V.playing=true;
+  const lead=0.6, tail= V.is3d ? 2.4 : 1.5, T=V.dur; let t0=null; const id=++V.anim; V.playing=true;
   const step=ts=>{
     if(!V.playing || id!==V.anim) return;
     if(t0===null) t0=ts; const t=(ts-t0)/1000;
-    const prog=Math.max(0,Math.min(1,(t-lead)/T));
+    const prog=Math.max(0,Math.min(1,(t-lead)/T)); V.tailF=Math.max(0,Math.min(1,(t-lead-T)/tail));
     vFrame(prog,t);
     if(V.onTick) V.onTick(Math.min(1,t/(lead+T+tail)));
     if(t<lead+T+tail) requestAnimationFrame(step); else { V.playing=false; onEnd&&onEnd(); }
@@ -1901,7 +2095,7 @@ function alertMsg(t){ setStatus("routeStatus",t,true); showTab("route"); }
 document.getElementById("vClose").onclick=()=>{ vStop(); if(V.rec&&V.rec.state==="recording") V.rec.stop(); document.getElementById("vModal").hidden=true; };
 document.getElementById("vPlay").onclick=()=>{ vResetOut(); vStop(); setTimeout(()=>vAnimate(),30); };
 document.getElementById("vPng").onclick=()=>{
-  vStop(); vResetOut(); vFrame(1,0);
+  vStop(); vResetOut(); V.tailF=1; vFrame(1,0);
   V.canvas.toBlob(b=>{ V.blob=b; V.ext="png"; V.kind="image"; document.getElementById("vSaveRow").hidden=false; vMsg("画像ができました"); },"image/png");
 };
 document.getElementById("vRec").onclick=()=>{
