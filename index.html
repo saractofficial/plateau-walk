@@ -60,6 +60,28 @@
   .leaflet-popup-content td{border-top:1px solid #eee;padding:2px 4px;vertical-align:top}
   .leaflet-popup-content td:first-child{color:#777;white-space:nowrap}
 
+  .toast{position:absolute;z-index:1500;left:50%;bottom:calc(var(--navH) + 200px);transform:translate(-50%,10px);max-width:calc(100vw - 32px);width:max-content;padding:10px 16px;border-radius:14px;background:rgba(15,23,42,.92);color:#fff;font-size:13px;line-height:1.5;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast.warn{background:rgba(161,98,7,.95)} .toast.err{background:rgba(185,28,28,.95)} .toast.ok{background:rgba(21,128,61,.95)}
+  .rechud{position:absolute;z-index:1001;left:12px;right:70px;top:calc(var(--topS) + 72px);padding:12px 14px;border-radius:18px;background:rgba(15,23,42,.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);color:#fff;box-shadow:var(--shadow)}
+  .rechud[hidden]{display:none}
+  .rechud .hrow{display:flex;align-items:center;gap:8px;font-size:13px}
+  .rechud .htime{font-variant-numeric:tabular-nums;font-weight:700;color:#7dd3fc}
+  .rechud .hgps{margin-left:auto;font-size:11.5px;font-weight:600}
+  .recdot{width:10px;height:10px;border-radius:50%;background:#ef4444;animation:blink 1.2s infinite}
+  .rechud .hgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+  .rechud .hgrid b{display:block;font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+  .rechud .hgrid span{font-size:10.5px;color:#94a3b8}
+  .rechud .hnote{font-size:11.5px;color:#fde68a;margin-top:6px;line-height:1.5}
+  body:has(.rechud:not([hidden])) .near{top:calc(var(--topS) + 200px)}
+  .dlg{position:fixed;inset:0;z-index:3000;background:rgba(2,6,23,.45);display:flex;align-items:center;justify-content:center;padding:20px}
+  .dlg[hidden]{display:none}
+  .dbox{width:100%;max-width:360px;background:#fff;border-radius:20px;padding:20px;box-shadow:var(--shadow)}
+  .dbox .dt{font-size:17px;font-weight:800;margin-bottom:8px}
+  .dbox .db{font-size:13.5px;line-height:1.7;color:#334155}
+  .dbtns{display:flex;gap:8px;margin-top:16px}
+  .dbtns .btn{flex:1}
+  .dbtns .btn[hidden]{display:none}
   /* ===== ボトムシート ===== */
   .sheet{position:absolute;z-index:1003;left:0;right:0;bottom:var(--navH);height:calc(100dvh - var(--navH) - var(--topS) - 70px);background:var(--panel);border-radius:22px 22px 0 0;box-shadow:0 -8px 30px rgba(15,23,42,.18);display:flex;flex-direction:column;transform:translateY(calc(100% - 128px));transition:transform .32s cubic-bezier(.2,.8,.2,1);will-change:transform}
   .sheet.dragging{transition:none}
@@ -196,6 +218,9 @@
   </div>
   <div class="km" id="drawTip">📍 地図をタップして地点を追加（右の📍で終了）</div>
   <div class="near" id="nearBox"></div>
+  <div class="rechud" id="recHud" hidden></div>
+  <div class="toast" id="toast"></div>
+  <div class="dlg" id="dlg" hidden><div class="dbox"><div class="dt"></div><div class="db"></div><div class="dbtns"><button class="btn dng">キャンセル</button><button class="btn primary dok">OK</button></div></div></div>
 
   <!-- 右：丸ボタン -->
   <div class="fabs">
@@ -950,63 +975,149 @@ document.getElementById("gjBtn").onclick=()=>{
   st.addEventListener("change",apply);
   document.getElementById("strideCalc").onclick=()=>{ const h=+ht.value; if(h>=100&&h<=220){ st.value=Math.round(h*0.45); apply(); } else ht.focus(); };
 })();
+/* ========= 通知（トースト）と確認ダイアログ ========= */
+function toast(msg, kind="info", ms=4000){
+  const t=document.getElementById("toast"); t.innerHTML=msg; t.className="toast show "+kind;
+  clearTimeout(toast.tm); if(ms) toast.tm=setTimeout(()=>t.className="toast "+kind, ms);
+}
+function ask(title, body, okLabel="OK", cancelLabel="キャンセル"){
+  return new Promise(res=>{
+    const d=document.getElementById("dlg");
+    d.querySelector(".dt").textContent=title; d.querySelector(".db").innerHTML=body;
+    const ok=d.querySelector(".dok"), ng=d.querySelector(".dng");
+    ok.textContent=okLabel; ng.textContent=cancelLabel; ng.hidden=!cancelLabel;
+    d.hidden=false;
+    ok.onclick=()=>{ d.hidden=true; res(true); }; ng.onclick=()=>{ d.hidden=true; res(false); };
+  });
+}
+
 /* ========= GPS（現在地・歩行記録） ========= */
-const gps = { watch:null, recording:false, marker:null, acc:null, last:null };
+const gps = { watch:null, marker:null, acc:null, last:null, lastFix:null, lastTime:0, start:0, timer:null, lock:null, fixes:0, waitTm:null };
 const fabStop=document.getElementById("fabStop");
 const locBtn=document.getElementById("locBtn"), recBtn=document.getElementById("recBtn"), nearBox=document.getElementById("nearBox");
+const hud=document.getElementById("recHud");
+const ACC_OK=50;            // この精度（m）以内の位置だけをルートに使う
+const MIN_STEP=8;           // 8m 以上動いたら点を追加
+const MAX_SPEED=25/3.6;     // 時速25km を超える「飛び」は無視（m/秒）
+
+const GEO_HELP = `<b>iPhone の場合</b><br>① 設定 → プライバシーとセキュリティ → 位置情報サービス を「オン」<br>② 同じ画面の「Safari Webサイト」→「使用中のみ許可」＋「正確な位置情報」をオン<br>③ Safari でこのページを開き、アドレスバーの「ぁあ」→「Webサイトの設定」→ 位置情報 を「許可」<br><br>設定後、ページを再読み込みしてください。`;
+
 function startWatch(){
   if(gps.watch!=null) return true;
-  if(!("geolocation" in navigator)){ setStatus("routeStatus","この端末では位置情報が使えません",true); return false; }
-  gps.watch = navigator.geolocation.watchPosition(onPos, e=>{
-    setStatus("routeStatus", e.code===1 ? "位置情報が許可されていません（ブラウザの設定で許可してください）" : "位置情報を取得できません："+e.message, true);
-  }, {enableHighAccuracy:true, maximumAge:3000, timeout:20000});
+  if(!window.isSecureContext){ ask("位置情報が使えません","https のページでのみ位置情報を使えます。","閉じる",""); return false; }
+  if(!("geolocation" in navigator)){ ask("位置情報が使えません","この端末・ブラウザは位置情報に対応していません。","閉じる",""); return false; }
+  gps.watch = navigator.geolocation.watchPosition(onPos, onGeoErr, {enableHighAccuracy:true, maximumAge:0, timeout:30000});
+  toast("📡 現在地を取得しています…（はじめは数十秒かかることがあります）","info",0);
+  clearTimeout(gps.waitTm);
+  gps.waitTm=setTimeout(()=>{ if(!gps.fixes) toast("📡 まだ位置が取れません。屋外の空が見える場所に移動するか、位置情報の設定を確認してください。","warn",0); },15000);
   return true;
 }
+function stopWatch(){ if(gps.watch!=null){ navigator.geolocation.clearWatch(gps.watch); gps.watch=null; } }
+function onGeoErr(e){
+  if(e.code===1){
+    stopWatch(); clearTimeout(gps.waitTm);
+    if(state.recording){ state.recording=false; saveRec(); clearInterval(gps.timer); hud.hidden=true; recBtn.textContent="⏺ 記録開始"; recBtn.classList.remove("rec"); fabStop.style.display="none"; }
+    toast("⚠️ 位置情報が許可されていません","err",6000); ask("位置情報を許可してください", GEO_HELP, "閉じる", "");
+  } else if(!gps.fixes || (gps.lastFix && Date.now()-gps.lastFix.t>15000)){
+    // タイムアウト・一時的な取得失敗：監視は続いているので、案内だけ出す
+    toast("📡 GPS の信号を待っています…（屋外の空が見える場所の方が早く取れます）","warn",6000);
+  }
+}
 function onPos(pos){
-  const ll=[pos.coords.latitude, pos.coords.longitude], acc=pos.coords.accuracy;
+  const ll=[pos.coords.latitude, pos.coords.longitude], acc=pos.coords.accuracy, now=pos.timestamp||Date.now();
+  gps.fixes++; gps.lastFix={ll,acc,t:now};
+  if(gps.fixes===1){ clearTimeout(gps.waitTm); toast(`✅ 現在地を取得しました（誤差 約${Math.round(acc)}m）`,"ok"); }
   if(!gps.marker){
-    gps.acc=L.circle(ll,{radius:acc,color:"#1d4ed8",weight:1,fillOpacity:.08,interactive:false}).addTo(map);
-    gps.marker=L.circleMarker(ll,{radius:8,color:"#fff",weight:3,fillColor:"#1d4ed8",fillOpacity:1}).addTo(map);
-    map.setView(ll, Math.max(map.getZoom(),16));
+    gps.acc=L.circle(ll,{radius:acc,color:"#2563eb",weight:1,fillOpacity:.1,interactive:false}).addTo(map);
+    gps.marker=L.circleMarker(ll,{radius:9,color:"#fff",weight:3,fillColor:"#2563eb",fillOpacity:1}).addTo(map);
+    map.setView(ll, Math.max(map.getZoom(),17));
   } else { gps.marker.setLatLng(ll); gps.acc.setLatLng(ll).setRadius(acc); }
   if(state.recording){
-    if(acc<=40 && (!gps.last || haversine(gps.last,ll)>=10)){ // 精度40m以内・10m以上移動で記録
-      state.route.push(ll); gps.last=ll; routeChanged(false);
-      map.panTo(ll);
+    if(acc<=ACC_OK){
+      const dt=Math.max(1,(now-gps.lastTime)/1000), dist= gps.last ? haversine(gps.last,ll) : Infinity;
+      let jump = gps.last && dist/dt > MAX_SPEED && dist>40;          // 不自然な飛び（1回だけの外れ値）
+      if(jump){
+        gps.pend=(gps.pend||[]).concat([ll]).slice(-3);
+        // 飛んだ先で3回続けて近い位置が出たら「本当に移動した」とみなして受け入れる
+        if(gps.pend.length===3 && haversine(gps.pend[0],gps.pend[2])<40){ jump=false; }
+      }
+      if(!jump && (!gps.last || dist>=MIN_STEP)){
+        gps.pend=[]; state.route.push(ll); gps.last=ll; gps.lastTime=now; routeChanged(false);
+        map.panTo(ll,{animate:true});
+      }
     }
+    updateHud();
   }
   showNear(ll);
 }
 function showNear(ll){
-  const near=state.features.filter(f=>CATS[f.cat].on).map(f=>({f,d:haversine(ll,f.ll)})).filter(x=>x.d<=state.buffer).sort((a,b)=>a.d-b.d).slice(0,3);
+  const pool=state.features.filter(f=>CATS[f.cat].on).map(f=>({name:f.name||CATS[f.cat].label, ll:f.ll}))
+    .concat((state.tour||[]).map(t=>({name:T_CATS[t.cat].emoji+" "+t.name, ll:t.ll})))
+    .concat((state.cafes||[]).map(t=>({name:"☕ "+t.name, ll:t.ll})));
+  const near=pool.map(x=>({x,d:haversine(ll,x.ll)})).filter(o=>o.d<=Math.min(state.buffer,300)).sort((a,b)=>a.d-b.d).slice(0,3);
   if(!near.length){ nearBox.style.display="none"; return; }
-  nearBox.innerHTML = "近くのスポット："+near.map(x=>`<b>${esc(x.f.name||CATS[x.f.cat].label)}</b> ${Math.round(x.d)}m`).join("／");
+  nearBox.innerHTML = "近く："+near.map(o=>`<b>${esc(o.x.name)}</b> ${Math.round(o.d)}m`).join("／");
   nearBox.style.display="block";
 }
-locBtn.onclick=()=>{ if(startWatch() && gps.marker) map.setView(gps.marker.getLatLng(), Math.max(map.getZoom(),16)); };
-recBtn.onclick=()=>{
-  if(!state.recording){
-    if(state.route.length && !window.__confirmNew){ // 2回押しで既存ルートを消して開始
-      setStatus("routeStatus","既存のルートを消して記録を始めます。もう一度「記録開始」を押してください");
-      window.__confirmNew=true; setTimeout(()=>window.__confirmNew=false,4000); return; }
-    window.__confirmNew=false;
-    if(!startWatch()) return;
-    state.wps=[]; renderWps(); state.route=[]; gps.last=null; state.recording=true; routeChanged(false);
-    recBtn.textContent="⏹ 記録停止"; recBtn.classList.add("rec"); fabStop.style.display="block";
-    setStatus("routeStatus","記録中…（10m歩くごとに点を追加）");
-    try{ navigator.wakeLock && navigator.wakeLock.request("screen").then(l=>gps.lock=l).catch(()=>{}); }catch(e){}
-  } else {
-    state.recording=false; recBtn.textContent="⏺ 記録開始"; recBtn.classList.remove("rec"); fabStop.style.display="none"; analyze();
-    try{ gps.lock && gps.lock.release(); }catch(e){}
-    setStatus("routeStatus",`記録を停止しました（${(routeLength(state.route)/1000).toFixed(2)} km）`);
-  }
+function fmtTime(sec){ sec=Math.floor(sec); const h=Math.floor(sec/3600), m=Math.floor(sec%3600/60), s=sec%60, p=n=>String(n).padStart(2,"0"); return h?`${h}:${p(m)}:${p(s)}`:`${p(m)}:${p(s)}`; }
+function updateHud(){
+  if(!state.recording){ hud.hidden=true; return; }
+  const len=routeLength(state.route), f=gps.lastFix, age=f?(Date.now()-f.t)/1000:999;
+  const q = !f ? ["待機中","#94a3b8"] : age>20 ? ["信号なし","#ef4444"] : f.acc<=15 ? ["良好","#22c55e"] : f.acc<=ACC_OK ? ["普通","#eab308"] : ["弱い","#f97316"];
+  hud.hidden=false;
+  hud.innerHTML=`<div class="hrow"><span class="recdot"></span><b>記録中</b><span class="htime">${fmtTime((Date.now()-gps.start)/1000)}</span>
+    <span class="hgps" style="color:${q[1]}">● GPS ${q[0]}${f?` ±${Math.round(f.acc)}m`:""}</span></div>
+    <div class="hgrid"><div><b>${(len/1000).toFixed(2)}</b><span>km</span></div><div><b>${fmtSteps(len)}</b><span>歩（目安）</span></div><div><b>${state.route.length}</b><span>記録点</span></div></div>
+    ${f&&f.acc>ACC_OK?`<div class="hnote">位置の誤差が大きいため記録を待っています（±${ACC_OK}m 以内で記録）</div>`:""}
+    ${!f||age>20?`<div class="hnote">屋外の空が見える場所の方が位置を取りやすくなります</div>`:""}`;
+}
+async function lockScreen(){ try{ if(navigator.wakeLock && document.visibilityState==="visible"){ gps.lock=await navigator.wakeLock.request("screen"); } }catch(e){} }
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState!=="visible" || !state.recording) return;
+  // 画面に戻ったら位置の受信を張り直す（iPhone は裏に回ると止まることがあるため）
+  stopWatch(); startWatch(); lockScreen();
+  toast("▶️ 記録を再開しました（画面が消えていた間は記録されていない場合があります）","info",5000);
+});
+locBtn.onclick=()=>{
+  if(gps.marker){ map.setView(gps.marker.getLatLng(), Math.max(map.getZoom(),17)); if(gps.watch==null) startWatch(); }
+  else startWatch();
 };
-fabStop.onclick=()=>recBtn.click();
+function saveRec(){ try{ localStorage.setItem("pw_rec", JSON.stringify(state.recording?{on:true,start:gps.start}:{on:false})); }catch(e){} }
+async function startRecording(resume){
+  if(!resume && state.route.length>1){
+    const ok=await ask("記録を始めます","今表示しているルートを消して、歩いた道を新しく記録します。よろしいですか？","記録を始める","キャンセル");
+    if(!ok) return;
+  }
+  if(!startWatch()) return;
+  if(!resume){ state.wps=[]; renderWps(); state.route=[]; gps.start=Date.now(); routeChanged(false); }
+  gps.last= state.route.length ? state.route[state.route.length-1] : null; gps.lastTime=Date.now();
+  state.recording=true; saveRec();
+  recBtn.textContent="⏹ 記録停止"; recBtn.classList.add("rec"); fabStop.style.display="block";
+  setStatus("routeStatus","記録中…（8m 歩くごとに点を追加）");
+  sheetTo("peek"); lockScreen();
+  clearInterval(gps.timer); gps.timer=setInterval(updateHud,1000); updateHud();
+  if(gps.lastFix) map.setView(gps.lastFix.ll, Math.max(map.getZoom(),17));
+}
+function stopRecording(){
+  state.recording=false; saveRec(); clearInterval(gps.timer); hud.hidden=true;
+  recBtn.textContent="⏺ 記録開始"; recBtn.classList.remove("rec"); fabStop.style.display="none"; analyze();
+  try{ gps.lock && gps.lock.release(); }catch(e){} gps.lock=null;
+  const len=routeLength(state.route);
+  setStatus("routeStatus",`記録を停止しました（${(len/1000).toFixed(2)} km・約${fmtSteps(len)}歩・${fmtTime((Date.now()-gps.start)/1000)}）`);
+  toast(`⏹ 記録を停止しました：${(len/1000).toFixed(2)} km・約${fmtSteps(len)}歩`,"ok",5000);
+  if(state.route.length>1) map.fitBounds(L.latLngBounds(state.route).pad(0.15));
+}
+recBtn.onclick=()=>{ state.recording ? stopRecording() : startRecording(false); };
+fabStop.onclick=()=>stopRecording();
+
 // ルートを端末内に保存・復元
 const _rc = routeChanged;
 routeChanged = function(fit){ _rc(fit); try{ localStorage.setItem("pw_route", JSON.stringify(state.route)); }catch(e){} };
 try{ const saved=JSON.parse(localStorage.getItem("pw_route")||"[]"); if(saved.length>1){ state.route=saved; _rc(true); } }catch(e){}
 try{ const sw=JSON.parse(localStorage.getItem("pw_wps")||"[]"); if(sw.length){ state.wps=sw; renderWps(); } }catch(e){}
+try{ const rc=JSON.parse(localStorage.getItem("pw_rec")||"{}");
+  if(rc.on){ gps.start=rc.start||Date.now();
+    ask("記録の途中です","前回の記録が終わっていません。続きから記録しますか？","続ける","終了する").then(ok=>{ if(ok) startRecording(true); else { state.recording=true; stopRecording(); } }); } }catch(e){}
 
 /* ========= 共通：ルート上の位置 ========= */
 function cumDist(pts){ const c=[0]; for(let i=1;i<pts.length;i++) c.push(c[i-1]+haversine(pts[i-1],pts[i])); return c; }
@@ -1326,7 +1437,7 @@ function renderTour(){
 document.getElementById("tBtn").onclick=async ()=>{ const b=document.getElementById("tBtn"); b.disabled=true; try{ await searchTourism(false); }catch(e){} finally{ b.disabled=false; } };
 // ルートが変わったら古い結果を消す
 const _rc3 = routeChanged;
-routeChanged = function(fit){ _rc3(fit); if(state.tour && state.tourKey!==routeKey()){ state.tour=null; state.cafes=null; tourLayer.clearLayers(); document.getElementById("tList").innerHTML=""; document.getElementById("tChips").innerHTML=""; } };
+routeChanged = function(fit){ _rc3(fit); if(!state.recording && state.tour && state.tourKey!==routeKey()){ state.tour=null; state.cafes=null; tourLayer.clearLayers(); document.getElementById("tList").innerHTML=""; document.getElementById("tChips").innerHTML=""; } };
 
 
 /* ========= 動画：歩くイメージ ========= */
