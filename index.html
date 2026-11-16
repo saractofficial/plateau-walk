@@ -267,7 +267,7 @@
       <div class="sumrow">
         <div class="stat"><b id="stLen">–</b><span>距離</span></div>
         <div class="stat"><b id="stTime">–</b><span>徒歩</span></div>
-        <div class="stat"><b id="stSteps">–</b><span>歩数（目安）</span></div>
+        <div class="stat"><b id="stSteps">–</b><span>歩（目安）</span></div>
         <div class="stat"><b id="stCnt">–</b><span>スポット</span></div>
       </div>
     </div>
@@ -333,7 +333,7 @@
 
       <h2>PLATEAU の沿線スポット</h2>
       <ol class="spots" id="spotList"></ol>
-      <p class="hint" id="emptyHint">「データ」タブで PLATEAU のデータを読み込むと、ルート沿いのランドマーク・公園・駅が並びます。</p>
+      <p class="hint" id="emptyHint">観光スポットを探すと、PLATEAU のデータがある地域では、ルート沿いのランドマーク・公園・駅もここに並びます。</p>
       <div class="row">
         <button class="btn" id="csvBtn">CSV出力</button>
         <button class="btn" id="gjBtn">GeoJSON出力</button>
@@ -381,25 +381,20 @@
     <!-- データ -->
     <section class="pane" id="pane-data">
       <div class="ptitle">データ</div>
-      <p class="psub">国土交通省 PLATEAU のランドマーク・公園・駅のデータ</p>
+      <p class="psub">国土交通省 PLATEAU（3D都市モデル）のランドマーク・公園・駅のデータ</p>
       <div class="card">
-        <h3>PLATEAU から取得</h3>
-        <select id="areaPreset">
-          <option value="13100">東京都23区（13100）</option>
-          <option value="14100">横浜市（14100）</option>
-          <option value="14130">川崎市（14130）</option>
-          <option value="26100">京都市（26100）</option>
-          <option value="27100">大阪市（27100）</option>
-          <option value="23100">名古屋市（23100）</option>
-          <option value="40130">福岡市（40130）</option>
-          <option value="01100">札幌市（01100）</option>
-          <option value="">その他（コード入力）</option>
-        </select>
-        <div class="row" style="margin-top:8px">
-          <input type="text" id="areaCode" value="13100" placeholder="市区町村コード（カンマ区切り可）">
-          <button class="btn primary" id="fetchApi" style="flex:0 0 auto">取得</button>
-        </div>
+        <h3>📍 ルート周辺のデータを自動で取得</h3>
+        <p class="hint" style="margin-top:0">ルート（なければ地図の中心）がある市区町村を自動で調べ、PLATEAU のランドマーク・公園・駅のデータを読み込みます。番号の入力は不要です。</p>
+        <button class="btn primary wide" id="plAuto">📍 ルート周辺の PLATEAU データを取得</button>
+        <label class="toggle">「スポット」で探すときに自動で取得<input type="checkbox" id="plWithSpots" checked></label>
         <div id="dataStatus" class="status">データ未読み込み</div>
+      </div>
+      <div class="card">
+        <h3>🗾 地域を名前で選ぶ</h3>
+        <p class="hint" style="margin-top:0">PLATEAU のデータがある地域だけが表示されます。</p>
+        <select id="plPref"><option value="">都道府県を選ぶ</option></select>
+        <select id="plCity" style="margin-top:8px" disabled><option value="">市区町村を選ぶ</option></select>
+        <button class="btn wide" id="plGo" style="margin-top:8px" disabled>この地域のデータを取得</button>
       </div>
       <div class="card">
         <h3>対象カテゴリ</h3>
@@ -715,45 +710,118 @@ async function loadManifest(){
 /* --- 2) ブラウザから PLATEAU API を直接叩く --- */
 const GQL = `query($codes:[AreaCode!]){ datasets(input:{areaCodes:$codes, includeTypes:["landmark","park","station","shelter"]}){
   id name typeCode ... on RelatedDataset { cityCode wardCode items { name format url originalUrl originalFormat } } } }`;
-async function gql(codes){
+async function gqlRaw(query, variables){
   let lastErr;
   for(const ep of API_ENDPOINTS){
     try{
-      const r = await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:GQL,variables:{codes}})});
+      const r = await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query,variables})});
       if(!r.ok) throw new Error("HTTP "+r.status);
       const j = await r.json(); if(j.errors) throw new Error(j.errors[0].message);
-      return j.data.datasets;
+      return j.data;
     }catch(e){ lastErr=e; }
   }
   throw lastErr;
 }
-document.getElementById("areaPreset").onchange = e=>{ if(e.target.value) document.getElementById("areaCode").value=e.target.value; else document.getElementById("areaCode").focus(); };
-document.getElementById("fetchApi").onclick = async ()=>{
-  const codes = document.getElementById("areaCode").value.split(/[,\s、]+/).filter(Boolean);
-  if(!codes.length) return;
-  const btn=document.getElementById("fetchApi"); btn.disabled=true;
-  setStatus("dataStatus","PLATEAU データカタログに問い合わせ中…");
+async function gql(codes){ return (await gqlRaw(GQL,{codes})).datasets; }
+
+/* --- PLATEAU の関連データ（ランドマーク等）がある市区町村の一覧（名前で選べるように） --- */
+let PL_AREAS=null;
+async function plAreas(){
+  if(PL_AREAS) return PL_AREAS;
+  const d=await gqlRaw(`{ areas(input:{datasetTypes:["landmark","park","station","shelter"], areaTypes:[CITY,WARD]}){
+    code name type ... on City { prefectureCode prefecture{ name } } ... on Ward { cityCode prefectureCode city{ name } prefecture{ name } } } }`);
+  PL_AREAS=d.areas.map(a=>({code:a.code, name:a.name, type:a.type, city:a.cityCode||"", cityName:a.city&&a.city.name||"",
+    pref:a.prefectureCode, prefName:a.prefecture&&a.prefecture.name||""}));
+  return PL_AREAS;
+}
+/* --- 共通：指定した地域のデータを取得（進捗％つき） --- */
+async function plateauFetch(codes, label, P){
+  P.set(15,`${label} のデータを探しています`);
+  const ds = await gql(codes);
+  const items=[]; ds.forEach(d=>(d.items||[]).forEach(it=>{ const url=it.originalUrl||it.url;
+    if(/geojson|czml|json/i.test((it.originalFormat||it.format||"")+url)) items.push({d,url}); }));
+  if(!items.length) return {total:0, msgs:[]};
+  let total=0, msgs=[], k=0;
+  for(const {d,url} of items){
+    P.set(20+75*k/items.length, `ダウンロード中：${d.name}`);
+    try{ const t=await (await fetch(url)).text(); const n=ingest(t,d.name,d.typeCode); total+=n; msgs.push(`・${d.name}：${n}件`); }
+    catch(e){ msgs.push(`・${d.name}：取得できませんでした`); }
+    k++;
+  }
+  return {total, msgs};
+}
+/* --- ① ルートから自動で地域を判定して取得 --- */
+async function muniAt(ll){
+  try{ const r=await fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lat=${ll[0]}&lon=${ll[1]}`);
+    const j=await r.json(); return j.results && j.results.muniCd ? String(j.results.muniCd).padStart(5,"0") : null; }catch(e){ return null; }
+}
+async function plateauAuto(silent){
+  const btn=document.getElementById("plAuto");
+  const pts = state.route.length>1 ? state.route : (gps.lastFix ? [gps.lastFix.ll] : [ [map.getCenter().lat, map.getCenter().lng] ]);
+  const P = silent ? {set(){},creep(){},stop(){},done(){}} : progressUI("dataStatus");
+  btn.disabled=true;
   try{
-    const ds = await gql(codes);
-    if(!ds.length){ setStatus("dataStatus","該当データセットが見つかりませんでした（コードを確認してください）", true); return; }
-    let total=0, msgs=[];
-    for(const d of ds){
-      for(const it of (d.items||[])){
-        const url = it.originalUrl || it.url;
-        if(!/geojson|czml|json/i.test((it.originalFormat||it.format||"")+url)) continue;
-        setStatus("dataStatus",`ダウンロード中：${d.name}`);
-        try{
-          const t = await (await fetch(url)).text();
-          const n = ingest(t, d.name, d.typeCode); total+=n; msgs.push(`・${d.name}：${n}件`);
-        }catch(e){ msgs.push(`・${d.name}：取得失敗`); }
-      }
+    P.set(2,"場所から市区町村を調べています");
+    const cum=cumDist(pts), L=cum[cum.length-1], n=Math.min(8, Math.max(1, Math.ceil(L/1000)+1));
+    const munis=new Set();
+    for(let i=0;i<n;i++){ const {ll}= pts.length>1 ? pointAt(pts,cum,L*i/Math.max(1,n-1)) : {ll:pts[0]};
+      const m=await muniAt(ll); if(m) munis.add(m); P.set(2+8*(i+1)/n); }
+    if(!munis.size){ if(!silent) P.done("場所から市区町村を判定できませんでした。下の「地域を名前で選ぶ」から選んでください。",true); return 0; }
+    P.set(11,"PLATEAU の整備状況を確認しています");
+    const areas=await plAreas(), byCode=new Map(areas.map(a=>[a.code,a]));
+    const codes=new Set(), names=[];
+    munis.forEach(m=>{
+      let a=byCode.get(m);
+      if(!a && /^131\d\d$/.test(m)) a=byCode.get("13100");                    // 東京23区は「13100」でまとめて整備
+      if(!a){ const w=areas.find(x=>x.type==="WARD" && x.code===m); if(w) a=byCode.get(w.city)||w; }
+      if(a){ codes.add(a.code); if(a.city) codes.add(a.city); names.push(a.cityName? a.cityName+a.name : a.name); }
+    });
+    if(!codes.size){
+      if(!silent) P.done("このルート周辺は、PLATEAU のランドマーク・公園・駅のデータがまだ整備されていません。\n（観光スポットとカフェは「スポット」タブで全国どこでも探せます）");
+      return 0;
     }
-    setStatus("dataStatus",`PLATEAU から計${total}件を読み込みました\n`+msgs.join("\n"));
-    fitToData();
-  }catch(e){
-    setStatus("dataStatus",`ブラウザから直接取得できませんでした（${e.message}）。\n→ ターミナルで「python3 run.py ${codes.join(" ")}」を実行すると、データを取得してこのページを開き直します。`, true);
-  }finally{ btn.disabled=false; }
-};
+    const label=[...new Set(names)].join("・");
+    const {total,msgs}=await plateauFetch([...codes], label, P);
+    P.set(100,"完了");
+    if(!silent) P.done(total ? `${label} の PLATEAU データを ${total}件読み込みました\n`+msgs.join("\n") : `${label} には読み込めるデータがありませんでした。`);
+    if(total && !silent) fitToData();
+    return total;
+  }catch(e){ if(!silent) P.done(`PLATEAU のサーバーに接続できませんでした（${e.message}）。少し待ってもう一度お試しください。`,true); return 0; }
+  finally{ btn.disabled=false; }
+}
+document.getElementById("plAuto").onclick=()=>plateauAuto(false);
+
+/* --- ② 地域を名前で選ぶ --- */
+(async function(){
+  const ps=document.getElementById("plPref"), cs=document.getElementById("plCity"), go=document.getElementById("plGo");
+  const fill=async ()=>{
+    if(ps.options.length>1) return;
+    ps.innerHTML='<option value="">読み込み中…</option>';
+    try{
+      const areas=await plAreas();
+      const prefs=[...new Map(areas.map(a=>[a.pref,a.prefName])).entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+      ps.innerHTML='<option value="">都道府県を選ぶ</option>'+prefs.map(([c,n])=>`<option value="${c}">${esc(n||c)}</option>`).join("");
+    }catch(e){ ps.innerHTML='<option value="">読み込めませんでした（タップで再試行）</option>'; }
+  };
+  ps.addEventListener("focus",fill); ps.addEventListener("pointerdown",fill);
+  document.querySelector('.tabs [data-tab="data"]').addEventListener("click",fill);
+  ps.onchange=()=>{
+    const list=(PL_AREAS||[]).filter(a=>a.pref===ps.value && a.type==="CITY").sort((a,b)=>a.code.localeCompare(b.code));
+    cs.innerHTML='<option value="">市区町村を選ぶ</option>'+list.map(a=>`<option value="${a.code}">${esc(a.name)}</option>`).join("");
+    cs.disabled=!list.length; go.disabled=true;
+  };
+  cs.onchange=()=>{ go.disabled=!cs.value; };
+  go.onclick=async ()=>{
+    const a=(PL_AREAS||[]).find(x=>x.code===cs.value); if(!a) return;
+    const P=progressUI("dataStatus"); go.disabled=true;
+    try{ const {total,msgs}=await plateauFetch([a.code], a.name, P); P.set(100,"完了");
+      P.done(total ? `${a.name} の PLATEAU データを ${total}件読み込みました\n`+msgs.join("\n") : `${a.name} には読み込めるデータがありませんでした。`);
+      if(total) fitToData(); }
+    catch(e){ P.done(`PLATEAU のサーバーに接続できませんでした（${e.message}）`,true); }
+    finally{ go.disabled=false; }
+  };
+})();
+
 
 /* --- 3) ファイル D&D --- */
 function setupDrop(dropId, inputId, handler){
@@ -951,8 +1019,8 @@ function analyze(){
   const len=routeLength(state.route);
   document.getElementById("stLen").textContent = state.route.length>1 ? (len/1000).toFixed(2)+"km" : "–";
   document.getElementById("stTime").textContent = state.route.length>1 ? Math.round(len/80)+"分" : "–";
-  document.getElementById("stSteps").textContent = state.route.length>1 ? fmtSteps(len)+"歩" : "–";
-  if(state.route.length<2 || !state.features.length){ if(!state.tour) document.getElementById("stCnt").textContent="–"; document.getElementById("emptyHint").style.display="block"; state.results=[]; return; }
+  document.getElementById("stSteps").textContent = state.route.length>1 ? fmtSteps(len) : "–";
+  if(state.route.length<2 || !state.features.length){ if(!state.tour) document.getElementById("stCnt").textContent="–"; document.getElementById("emptyHint").style.display="block"; state.results=[]; if(state.route.length>1) state.autoResult=false; return; }
   const cum=[0]; for(let i=1;i<state.route.length;i++) cum.push(cum[i-1]+haversine(state.route[i-1],state.route[i]));
   // バウンディングボックスで前処理（高速化）
   const dLat=state.buffer/111000*1.2, dLng=dLat/Math.cos(toRad(state.route[0][0]));
@@ -981,7 +1049,7 @@ function analyze(){
     li.onclick=()=>{ map.setView(r.f.ll, Math.max(map.getZoom(),16)); m.openPopup(); };
     list.appendChild(li);
   });
-  if(res.length && state.autoResult){ state.autoResult=false; showTab("result"); }
+  if(res.length && state.autoResult) showTab("result"); state.autoResult=false;
 }
 
 /* ========= 出力 ========= */
@@ -1525,7 +1593,9 @@ function renderTour(){
     ul.appendChild(li);
   });
 }
-document.getElementById("tBtn").onclick=async ()=>{ const b=document.getElementById("tBtn"); b.disabled=true; try{ await searchTourism(false); }catch(e){} finally{ b.disabled=false; } };
+document.getElementById("tBtn").onclick=async ()=>{ const b=document.getElementById("tBtn"); b.disabled=true;
+  if(document.getElementById("plWithSpots").checked && state.route.length>1 && state.plKey!==routeKey()){ state.plKey=routeKey(); plateauAuto(true).catch(()=>{}); }   // 裏で PLATEAU も取得
+  try{ await searchTourism(false); }catch(e){} finally{ b.disabled=false; } };
 // ルートが変わったら古い結果を消す
 const _rc3 = routeChanged;
 routeChanged = function(fit){ _rc3(fit); if(!state.recording && state.tour && state.tourKey!==routeKey()){ state.tour=null; state.cafes=null; tourLayer.clearLayers(); document.getElementById("tList").innerHTML=""; document.getElementById("tChips").innerHTML=""; } };
