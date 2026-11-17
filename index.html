@@ -118,6 +118,7 @@
   .badge[hidden]{display:none}
   .empty{text-align:center;color:var(--sub);font-size:13px;line-height:1.8;padding:28px 10px;background:var(--bg);border-radius:16px;margin-top:10px}
   .empty b{color:var(--ink);font-size:15px}
+  .srcbadge.wk{color:#0f766e;background:#ccfbf1}
   .srcbadge{display:inline-block;font-size:10px;font-weight:700;color:#7c3aed;background:#f3e8ff;border-radius:6px;padding:1px 6px;margin-left:4px;vertical-align:2px}
   details.sub{margin-top:8px;background:var(--bg);border-radius:12px;padding:10px 12px}
   details.sub summary{font-size:13px;font-weight:600;cursor:pointer;color:var(--ink)}
@@ -324,7 +325,7 @@
     <!-- スポット -->
     <section class="pane" id="pane-result">
       <div class="ptitle">スポット</div>
-      <p class="psub">ルート沿いの観光スポット・カフェを、スタートからの順に表示します</p>
+      <p class="psub">ルート沿いの観光スポット（Wikipedia に載っている場所）とカフェを、スタートからの順に表示します</p>
       <button class="btn primary wide" id="tBtn">🔎 沿線のスポットを調べる</button>
       <div id="tStatus" class="status" style="display:none"></div>
       <div class="seg" id="tView" hidden>
@@ -340,7 +341,7 @@
       <div id="gLinks" class="glinks"></div>
       <ol class="spots" id="gList"></ol>
       <div id="gAttr" class="gattr" style="display:none">Google Maps</div>
-      <p class="hint">出典：OpenStreetMap、Wikipedia／Wikimedia Commons、PLATEAU（国土交通省）</p>
+      <p class="hint">出典：観光スポット＝Wikipedia／Wikimedia Commons、カフェ＝OpenStreetMap（Nominatim）、PLATEAU（国土交通省）</p>
     </section>
 
     <!-- 動画 -->
@@ -1558,77 +1559,103 @@ function routeForQuery(){
   pts.forEach((p,i)=>{ if(cum[i]>=next || i===pts.length-1){ out.push(p); next=cum[i]+step; } });
   return out;
 }
+/* ========= 観光スポット：Wikipedia の「位置情報つき記事」から探す ========= */
+const WK_EXCLUDE=/(小学校|中学校|高等学校|高校|大学|学園|学院|専門学校|幼稚園|保育園|株式会社|有限会社|病院|医院|クリニック|郵便局|警察|消防|交番|区役所|市役所|役場|出張所|団地|マンション|住宅|事務所|本社|支社|工場|銀行|信用金庫|ホテル|旅館|線$|道路|通り$|国道|都道|県道|府道|首都高|インターチェンジ|ジャンクション|トンネル|変電所|放送局|丁目|選挙区|郵便|税務署|裁判所|大使館|研究所|センター$)/;
+function wkClassify(title){
+  if(/神社|稲荷|八幡|天満宮|大社|宮$/.test(title)) return "shrine";
+  if(/寺|院$|観音|不動|地蔵/.test(title)) return "temple";
+  if(/教会|聖堂|カテドラル/.test(title)) return "church";
+  if(/博物館|美術館|記念館|資料館|ミュージアム|ギャラリー|文学館|郷土館/.test(title)) return "museum";
+  if(/展望|タワー|スカイ/.test(title)) return "view";
+  if(/公園|庭園|緑地|植物園|森$/.test(title)) return "park";
+  if(/駅$/.test(title)) return "station";
+  if(/動物園|水族館|遊園地|ランド$/.test(title)) return "fun";
+  if(/跡|碑|古墳|遺跡|城$|城址|陣屋|関所|記念碑|像$|塚$/.test(title)) return "history";
+  return "sight";
+}
+async function wikiNear(R, onProg){
+  const pts=state.route, cum=cumDist(pts), L=cum[cum.length-1];
+  // ルート沿いに検索の中心を並べる（円がすき間なく重なるように）
+  const n=Math.min(12, Math.max(1, Math.ceil(L/1200)+1)), spacing= n>1 ? L/(n-1) : 0;
+  const radius=Math.round(Math.min(10000, Math.max(R*1.3, spacing*0.62, 300)));
+  const cand=new Map(); let done=0;
+  await Promise.all(Array.from({length:n},(_,i)=>i).map(async i=>{
+    const {ll}=pointAt(pts,cum, n>1 ? spacing*i : 0);
+    try{ const j=await wget(`https://ja.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${ll[0].toFixed(5)}|${ll[1].toFixed(5)}&gsradius=${radius}&gslimit=500&format=json&origin=*`);
+      ((j.query&&j.query.geosearch)||[]).forEach(g=>{ if(!cand.has(g.pageid)) cand.set(g.pageid,g); }); }catch(e){}
+    onProg&&onProg(0.5*(++done)/n);
+  }));
+  // ルートから R m 以内・対象外のジャンルを除いて候補にする
+  const list=[];
+  cand.forEach(g=>{
+    if(WK_EXCLUDE.test(g.title)) return;
+    const ll=[g.lat,g.lon], pr=projectToRoute(ll,pts,cum); if(pr.d>R) return;
+    const name=g.title.replace(/\s*\(.+\)$/,"");
+    list.push({pageid:g.pageid, title:g.title, name, ll, cat:wkClassify(name), d:pr.d, along:pr.along});
+  });
+  // 写真・説明をまとめて取得（20件ずつ）
+  const top=list.sort((a,b)=>a.d-b.d).slice(0,120), by=new Map(top.map(x=>[x.pageid,x]));
+  const ids=[...by.keys()], batches=[]; for(let i=0;i<ids.length;i+=20) batches.push(ids.slice(i,i+20));
+  let k=0;
+  for(const b of batches){
+    try{ const j=await wget(`https://ja.wikipedia.org/w/api.php?action=query&pageids=${b.join("|")}&prop=pageimages|extracts|pageprops&piprop=thumbnail&pithumbsize=320&exintro=1&explaintext=1&exchars=90&exlimit=20&ppprop=wikibase_item|disambiguation&format=json&origin=*`);
+      Object.values((j.query&&j.query.pages)||{}).forEach(p=>{ const x=by.get(p.pageid); if(!x) return;
+        if(p.pageprops&&p.pageprops.disambiguation!==undefined){ by.delete(p.pageid); return; }
+        if(p.thumbnail) x.photo=p.thumbnail.source;
+        if(p.extract) x.desc=p.extract.replace(/\s+/g," ").replace(/（[^）]*）|\([^)]*\)/g,"").slice(0,70);
+        x.wd=(p.pageprops&&p.pageprops.wikibase_item)||""; }); }catch(e){}
+    onProg&&onProg(0.5+0.5*(++k)/batches.length);
+  }
+  return [...by.values()].map(x=>Object.assign(x,{
+    score: 2+(x.photo?3:0)+(x.cat==="sight"?0:1)+(x.desc?1:0),
+    wikiUrl:`https://ja.wikipedia.org/wiki/${encodeURIComponent(x.title)}`}));
+}
+/* ========= カフェ（Nominatim：地図の住所・施設検索） ========= */
+async function cafesNominatim(bbox){
+  const [s,w,n,e]=bbox;
+  const url=`https://nominatim.openstreetmap.org/search?format=jsonv2&q=cafe&viewbox=${w},${n},${e},${s}&bounded=1&limit=50&accept-language=ja&extratags=1`;
+  const ac=new AbortController(), kill=setTimeout(()=>ac.abort(),12000);
+  try{
+    const r=await fetch(url,{signal:ac.signal}); if(!r.ok) throw new Error("HTTP "+r.status); const t=await r.text(); NET.bytes+=t.length;
+    const cum=cumDist(state.route), R=Math.max(80,state.buffer);
+    return JSON.parse(t).filter(x=>x.type==="cafe"&&x.name).map(x=>{ const ll=[+x.lat,+x.lon], pr=projectToRoute(ll,state.route,cum);
+      return {name:x.name, ll, cat:"cafe", score:1, d:pr.d, along:pr.along, hours:(x.extratags&&x.extratags.opening_hours)||"", web:(x.extratags&&x.extratags.website)||"",
+        osm:`https://www.openstreetmap.org/${x.osm_type}/${x.osm_id}`}; }).filter(x=>x.d<=R);
+  } finally { clearTimeout(kill); }
+}
+
 async function searchTourism(silent, Pext){
-  if(state.route.length<2){ if(!silent) tStatus("先に「② ルート」でルートを作ってください",true); return; }
+  if(state.route.length<2){ if(!silent) tStatus("先に「ルート」タブでルートを作ってください",true); return; }
   const R=Math.max(80, state.buffer);
-  // ルートを囲む四角形（＋距離分の余白）で検索し、ルートからの距離は端末側で判定する（軽くて速い）
   let s=90,n=-90,w=180,e=-180; state.route.forEach(p=>{ s=Math.min(s,p[0]); n=Math.max(n,p[0]); w=Math.min(w,p[1]); e=Math.max(e,p[1]); });
   const dLat=R/111000*1.1, dLng=dLat/Math.cos(toRad((s+n)/2));
-  const bb=`(${(s-dLat).toFixed(5)},${(w-dLng).toFixed(5)},${(n+dLat).toFixed(5)},${(e+dLng).toFixed(5)})`;
-  const q=`[out:json][timeout:25][maxsize:33554432];(
-nwr["tourism"~"^(attraction|museum|gallery|viewpoint|artwork|zoo|aquarium|theme_park)$"]["name"]${bb};
-nwr["historic"]["name"]${bb};
-nwr["amenity"="place_of_worship"]["name"]${bb};
-nwr["leisure"~"^(park|garden)$"]["name"]${bb};
-nwr["amenity"="cafe"]["name"]${bb};
-);out center tags;`;
+  const box=[s-dLat,w-dLng,n+dLat,e+dLng];
   const P= Pext || (silent ? (window.__vProg||{set(){},creep(){},stop(){},done(){}}) : progressUI("tStatus"));
-  const base= silent ? 0 : 0, span= silent ? 0 : 1;
-  let j=null, errs=[], tries=0;
-  const LIMIT=25;   // 1サーバーあたり最大25秒待つ
-  for(const ep of OVERPASS){
-    const lo=tries*(55/OVERPASS.length), hi=lo+55/OVERPASS.length;
-    const label = tries ? `予備サーバー ${tries+1}/${OVERPASS.length} で再検索中` : "① スポットを検索中（OpenStreetMap）";
-    const ac=new AbortController(), t0=Date.now();
-    // 残り秒数を見せながら、このサーバーの持ち時間の範囲で％を進める
-    P.set(lo,label);
-    const tick=setInterval(()=>{ const el=(Date.now()-t0)/1000; P.set(lo+(hi-lo)*Math.min(.98,el/LIMIT), `${label}（残り${Math.max(0,Math.ceil(LIMIT-el))}秒）`); },100);
-    const kill=setTimeout(()=>ac.abort(), LIMIT*1000);
-    tries++;
-    try{
-      const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"},signal:ac.signal});
-      if(!r.ok) throw new Error(r.status===429||r.status===504 ? "混雑中" : "HTTP "+r.status);
-      const txt=await r.text(); NET.bytes+=txt.length;
-      const jj=JSON.parse(txt);
-      if(jj.remark && !(jj.elements&&jj.elements.length)) throw new Error("処理が打ち切られました");
-      j=jj; break;
-    }catch(e){ errs.push(e.name==="AbortError" ? `${LIMIT}秒応答なし` : e.message); }
-    finally{ clearInterval(tick); clearTimeout(kill); }
-  }
-  P.stop();
-  if(!j){ state.lastErr=errs.join("／"); if(!silent) P.done("検索サービスに接続できませんでした（"+errs.join("／")+"）。1〜2分おいて、もう一度お試しください。",true); throw new Error("failed"); }
-  P.set(58,"② ルート沿いのスポットを選別中");
-  const total=(j.elements||[]).length;
-  const cum=cumDist(state.route), seen=new Map(), cafes=new Map();
-  for(const el of j.elements||[]){
-    const t=el.tags||{}, name=t["name:ja"]||t.name; if(!name) continue;
-    const lat= el.lat ?? (el.center&&el.center.lat), lon= el.lon ?? (el.center&&el.center.lon); if(lat==null) continue;
-    const ll=[lat,lon], pr=projectToRoute(ll,state.route,cum); if(pr.d>R) continue;
-    const wm=(t.wikipedia||"").match(/^([a-z\-]+):(.+)$/);
-    const item={name, ll, cat:classify(t), score:scoreOf(t), d:pr.d, along:pr.along, wd:/^Q\d+$/.test(t.wikidata||"")?t.wikidata:"",
-      wikiLang: wm?wm[1]:"", wikiTitle: wm?wm[2]:"", commons:t.wikimedia_commons||"", photo: /^https:\/\/upload\.wikimedia\.org\//.test(t.image||"")?t.image:"",
-      osm:`https://www.openstreetmap.org/${el.type}/${el.id}`};
-    if(item.cat==="cafe"){           // カフェは別枠（チェーン店は同名が多いので場所も含めて区別）
-      item.hours=t.opening_hours||""; item.web=t.website||t["contact:website"]||""; item.brand=t.brand||"";
-      cafes.set(name+"@"+lat.toFixed(4)+","+lon.toFixed(4), item); continue; }
-    const k=name.replace(/\s/g,""), old=seen.get(k);
-    if(!old || item.score>old.score) seen.set(k,item);
-  }
+  P.set(1,"① 観光スポットを検索中（Wikipedia）");
+  const cafeP=cafesNominatim(box).catch(()=>null);            // カフェは並行して検索
+  let wk=[], wkErr=null;
+  try{ wk=await wikiNear(R, f=>P.set(1+f*79, f<0.5 ? "① 観光スポットを検索中（Wikipedia）" : "② 写真と説明を取得中（Wikipedia）")); }catch(e){ wkErr=e; }
+  P.set(82,"③ カフェを検索中");
+  const cafeRes=await cafeP;
+  if(wkErr && !cafeRes){ state.lastErr=wkErr.message; if(!silent) P.done("検索できませんでした（"+wkErr.message+"）。電波の良い所でもう一度お試しください。",true); throw new Error("failed"); }
+  // 同じ名前は1つに（写真があるほうを残す）
+  const seen=new Map();
+  wk.forEach(x=>{ const k=x.name.replace(/\s/g,""), old=seen.get(k); if(!old||x.score>old.score) seen.set(k,x); });
   let list=[...seen.values()].sort((a,b)=>b.score-a.score || a.d-b.d).slice(0,60);
   list.sort((a,b)=>a.along-b.along);
-  P.set(60,"③ 写真と説明を取得中（Wikipedia）");
-  const W={wd:[60,70],wp:[70,92],cm:[92,99]};
-  await fetchPhotos(list,(k,f)=>P.set(W[k][0]+(W[k][1]-W[k][0])*f));
+  // 写真がない記事は Wikidata の画像で補う
+  P.set(86,"④ 写真を補っています");
+  await fetchPhotos(list.filter(t=>!t.photo && t.wd), (k,f)=>P.set(86+13*f));
   P.set(100,"完了");
   state.tour=list; state.tourKey=routeKey();
-  // カフェ：ルートに近い順に最大50件 → ルート順に
+  const cafes=new Map(); (cafeRes||[]).forEach(c=>cafes.set(c.name+"@"+c.ll[0].toFixed(4)+","+c.ll[1].toFixed(4),c));
   state.cafes=[...cafes.values()].sort((a,b)=>a.d-b.d).slice(0,50).sort((a,b)=>a.along-b.along);
+  state.cafeOK=!!cafeRes;
   renderTour();
   const nPhoto=list.filter(t=>t.photo).length;
-  if(!silent) P.done(list.length
-    ? `観光スポット ${list.length}件（写真あり ${nPhoto}件）・カフェ ${state.cafes.length}件が見つかりました。ルート沿い ${R}m 以内を、ルート順に表示しています。`
-    : total ? `周辺に ${total}件ありましたが、ルートから ${R}m 以内にはありませんでした。「② ルート」で距離を広げてみてください。`
-            : "この範囲には登録されたスポットがありませんでした。");
+  if(!silent) P.done(list.length||state.cafes.length
+    ? `観光スポット ${list.length}件（写真あり ${nPhoto}件）・カフェ ${state.cafes.length}件が見つかりました。`+(cafeRes?"":"（カフェの検索は混雑のため失敗）")
+    : `ルートから ${R}m 以内に Wikipedia の記事がある場所は見つかりませんでした。「ルート」タブで距離を広げてみてください。`);
 }
 function plateauSpots(){
   return (state.results||[]).filter(r=>r.f.name).map(r=>({name:r.f.name, ll:r.f.ll, cat:({landmark:"landmark",park:"park",station:"station"})[r.f.cat]||"sight",
@@ -1713,7 +1740,7 @@ async function runExplore(force){
   let ok=true; try{ await searchTourism(true,P); }catch(e){ ok=false; }
   await pl; renderTour();
   const nt=mergeTour().length, nc=(state.cafes||[]).length;
-  P.done(ok ? `✅ 観光 ${nt}件・カフェ ${nc}件（通信 約${fmtMB(NET.bytes)}）タップで一覧` : `⚠️ 検索サービスが混んでいます（${state.lastErr||""}）。タップでもう一度`, !ok);
+  P.done(ok ? `✅ 観光 ${nt}件・カフェ ${nc}件・通信 約${fmtMB(NET.bytes)}　タップで一覧` : `⚠️ 検索できませんでした（${state.lastErr||""}）。タップでもう一度`, !ok);
   if(!ok) state.exploreKey=null;
   const bd=document.getElementById("tabBadge");
   if(ok && document.querySelector(".tabs button.on").dataset.tab!=="result" && nt+nc){ bd.textContent=nt+nc; bd.hidden=false; }
@@ -2129,7 +2156,7 @@ function vFrame(prog, tSec){
   }
   if(V.showElev) drawElev(g,prog,u,FONT);
   g.textBaseline="alphabetic"; g.font=`400 ${10.5*u}px sans-serif`; g.fillStyle="rgba(255,255,255,.6)"; g.textAlign="right";
-  g.fillText((V.is3d?"地図：OpenFreeMap © OpenMapTiles Data from OpenStreetMap / 標高：国土地理院":isCartoV()?"地図：© OpenStreetMap © CARTO":"地図：国土地理院")+" / スポット：© OpenStreetMap / 写真：Wikimedia Commons / PLATEAU", W-12*u, H-8*u, W-24*u);
+  g.fillText((V.is3d?"地図：OpenFreeMap © OpenMapTiles Data from OpenStreetMap / 標高：国土地理院":isCartoV()?"地図：© OpenStreetMap © CARTO":"地図：国土地理院")+" / スポット・写真：Wikipedia / カフェ：© OpenStreetMap / PLATEAU", W-12*u, H-8*u, W-24*u);
   g.restore();
 }
 function vAnimate(onEnd){
